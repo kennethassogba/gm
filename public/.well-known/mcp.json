@@ -1,0 +1,10 @@
+{
+  "name": "GM Studio",
+  "description": "Local-first OpenMC geometry starter library and structure tools.",
+  "endpoint": "https://gm.keff.uk/api/mcp",
+  "transport": "JSON-RPC over HTTP POST",
+  "protocolVersion": "2025-11-25",
+  "authentication": "none",
+  "dataPolicy": "Requests are handled without persistent model storage. Benchmark documents are not bundled.",
+  "documentation": "https://gm.keff.uk/docs/agents/"
+}
