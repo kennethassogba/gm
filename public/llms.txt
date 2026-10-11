@@ -1,0 +1,16 @@
+# GM Studio
+
+GM Studio is a browser workspace for inspecting and editing a small set of OpenMC-style geometry starters.
+
+- Main application: https://gm.keff.uk/
+- Model and import limits: https://gm.keff.uk/docs/
+- Benchmark references: https://gm.keff.uk/docs/benchmarks/
+- Agent guide: https://gm.keff.uk/docs/agents/
+- Catalog JSON: https://gm.keff.uk/api/models.json
+- OpenAPI: https://gm.keff.uk/openapi.json
+- MCP endpoint: https://gm.keff.uk/api/mcp
+- MCP server card: https://gm.keff.uk/.well-known/mcp.json
+
+This preview uses a Canvas sketch. It does not contain the planned C++/WebAssembly geometry kernel, a GPU CSG renderer, a BEAVRS model, or an OpenMC runtime. Benchmark cards are source references only. Generic reactor layouts are schematic.
+
+Model edits and browser autosaves stay on the device. Files supplied to the agent endpoint are processed for that request and are not stored by this app.

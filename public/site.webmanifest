@@ -1,0 +1,9 @@
+{
+  "name": "GM Studio · OpenMC geometry",
+  "short_name": "GM Studio",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f5f6",
+  "theme_color": "#f3f5f6",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

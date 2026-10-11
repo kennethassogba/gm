@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f3f5f6" />
+    <meta name="description" content="Build and inspect OpenMC geometry in your browser. Model data stays on this device unless you export or send it to a tool." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="GM — OpenMC Geometry Studio" />
+    <meta property="og:description" content="A browser workspace for OpenMC geometry. Start with a pin, assembly or empty model." />
+    <meta property="og:url" content="https://gm.keff.uk/" />
+    <meta property="og:image" content="https://gm.keff.uk/social-preview.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:alt" content="Fuel pin cross-section diagram with fuel, gap and cladding layers on the GM Studio geometry workspace card." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="GM — OpenMC Geometry Studio" />
+    <meta name="twitter:description" content="Build and inspect OpenMC geometry in your browser." />
+    <meta name="twitter:image" content="https://gm.keff.uk/social-preview.png" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" title="LLM site guide" />
+    <link rel="alternate" type="application/json" href="/.well-known/mcp.json" title="Model Context Protocol server card" />
+    <link rel="stylesheet" href="/app.css" />
+    <title>GM — OpenMC Geometry Studio</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to workspace</a>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Workspace navigation">
+        <a class="brand" href="/" aria-label="GM home">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="brand-name">gm<span class="degree">°</span></span>
+        </a>
+        <div class="sidebar-rule"></div>
+        <p class="nav-caption">WORKSPACE</p>
+        <nav class="primary-nav" aria-label="Main">
+          <button class="nav-item is-active" data-page="library"><span class="nav-icon" aria-hidden="true">◈</span><span>Model library</span></button>
+          <button class="nav-item" data-page="studio" disabled><span class="nav-icon" aria-hidden="true">▧</span><span>Geometry editor</span></button>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="local-note"><span class="local-dot"></span><div><strong>Local workspace</strong><span>Saved on this device</span></div></div>
+          <a class="docs-link" href="/docs/">Model & agent guide <span aria-hidden="true">↗</span></a>
+          <span class="build-label">GM STUDIO <span>0.1.0 · PREVIEW</span></span>
+        </div>
+      </aside>
+
+      <div class="app-column">
+        <header class="topbar">
+          <div class="breadcrumb"><span class="crumb-root">OpenMC</span><span class="crumb-slash">/</span><span id="crumb-current">Model library</span></div>
+          <div class="topbar-actions">
+            <span class="save-state" id="save-state"><span class="save-dot"></span><span>Local only</span></span>
+            <button class="icon-button" id="undo-button" aria-label="Undo" title="Undo (Ctrl+Z)" disabled><span aria-hidden="true">↶</span></button>
+            <button class="icon-button" id="redo-button" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled><span aria-hidden="true">↷</span></button>
+            <button class="top-action" id="open-file-button" title="Open geometry.xml, materials.xml or GM model JSON">Open files <span aria-hidden="true">⌘O</span></button>
+            <button class="primary-button top-export" id="export-button" disabled>Export <span aria-hidden="true">⌄</span></button>
+          </div>
+        </header>
+
+        <main id="main" tabindex="-1">
+          <section class="library-screen" id="library-screen" aria-labelledby="library-title">
+            <div class="welcome-row">
+              <div>
+                <div class="eyebrow"><span class="eyebrow-line"></span> OPENMC GEOMETRY STUDIO</div>
+                <h1 id="library-title" tabindex="-1">Start with a shape.<br /><span>Build the hierarchy.</span></h1>
+                <p class="welcome-copy">Create a model from scratch or open a starter. Edit surfaces, cells and repeated universes, then export the files for OpenMC.</p>
+                <div class="welcome-actions">
+                  <button class="primary-button large-button" id="empty-model-button"><span class="plus-mark" aria-hidden="true">+</span> Empty geometry</button>
+                  <button class="secondary-button large-button" id="open-last-button" hidden>Continue recent model <span aria-hidden="true">→</span></button>
+                </div>
+              </div>
+              <div class="hero-figure" aria-label="Illustration of nested fuel pin geometry">
+                <div class="figure-label label-top"><span>01</span> CELLS</div>
+                <svg viewBox="0 0 470 310" role="img" aria-labelledby="figure-title figure-desc">
+                  <title id="figure-title">Nested cylinder surfaces</title>
+                  <desc id="figure-desc">A cutaway fuel pin drawn as concentric layers: fuel, gap, cladding and moderator.</desc>
+                  <defs>
+                    <linearGradient id="fuel-side" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#ffbd75"/><stop offset="1" stop-color="#dd6f36"/></linearGradient>
+                    <linearGradient id="clad-side" x1="0" x2="1"><stop offset="0" stop-color="#74d4db"/><stop offset="1" stop-color="#329ca8"/></linearGradient>
+                    <radialGradient id="fuel-top"><stop offset="0" stop-color="#ffc77e"/><stop offset="1" stop-color="#f58c4e"/></radialGradient>
+                  </defs>
+                  <g transform="translate(50 32)">
+                    <path d="M40 143 174 202 396 111 263 54Z" fill="#182a35" stroke="#314651"/>
+                    <path d="M40 143v65l134 59v-65Z" fill="#182a35" stroke="#314651"/>
+                    <path d="M174 202v65l222-91v-65Z" fill="#15252f" stroke="#314651"/>
+                    <path d="M72 130v-75c0-20 76-56 114-59s92 23 92 41v75" fill="url(#clad-side)" opacity=".94"/>
+                    <ellipse cx="175" cy="55" rx="103" ry="44" fill="#8ce2e4" stroke="#c7fbf4" stroke-width="2"/>
+                    <ellipse cx="175" cy="55" rx="73" ry="31" fill="#1d3039" stroke="#e8f6ef" stroke-width="2"/>
+                    <path d="M102 55v79c0 20 45 35 73 35 36 0 73-17 73-35V55" fill="url(#fuel-side)"/>
+                    <ellipse cx="175" cy="55" rx="60" ry="25" fill="url(#fuel-top)" stroke="#ffe0aa" stroke-width="2"/>
+                    <path d="M150 27 270 79" stroke="#fff3d2" stroke-width="2" opacity=".7"/>
+                    <path d="M248 105 345 66" stroke="#8ce2e4" stroke-width="2" opacity=".7"/>
+                  </g>
+                </svg>
+                <div class="figure-label label-bottom"><span>02</span> SURFACES</div>
+                <div class="figure-caption">one model, linked views</div>
+              </div>
+            </div>
+
+            <div class="library-heading">
+              <div><h2>Starter library</h2><p>Editable examples and benchmark references.</p></div>
+              <div class="library-filters" role="group" aria-label="Filter starter models">
+                <button class="filter-chip is-selected" data-filter="all">All</button>
+                <button class="filter-chip" data-filter="components">Components</button>
+                <button class="filter-chip" data-filter="benchmarks">Benchmarks</button>
+                <button class="filter-chip" data-filter="architectures">Architectures</button>
+              </div>
+            </div>
+            <div class="template-grid" id="template-grid"></div>
+            <div class="library-footnote"><span aria-hidden="true">ⓘ</span><p>Benchmark references are not bundled as validated OpenMC inputs. Generic reactor layouts are illustrative and carry no benchmark status.</p><a href="/docs/benchmarks/">Sources & versions ↗</a></div>
+          </section>
+
+          <section class="studio-screen" id="studio-screen" hidden aria-label="Geometry editor">
+            <div class="studio-titlebar">
+                <div class="model-title-group"><span class="model-glyph" aria-hidden="true">◉</span><div><h1 id="model-title" tabindex="-1">Untitled geometry</h1><p><span id="model-subtitle">CSG · starter subset</span><span class="title-separator">/</span><span id="model-save-text">Saved locally</span></p></div></div>
+              <div class="model-title-actions"><button class="quiet-button" id="model-info-button">Model notes</button><button class="primary-button" id="export-workspace-button">Export model <span aria-hidden="true">↗</span></button></div>
+            </div>
+            <div class="editor-grid">
+              <aside class="inspector tree-panel" aria-label="Model hierarchy">
+                <div class="panel-heading"><div><span class="panel-kicker">MODEL TREE</span><h2>Geometry</h2></div><button class="small-icon-button" id="add-geometry-button" aria-label="Add geometry item" title="Add geometry item">+</button></div>
+                <div class="tree-toolbar"><span class="tree-location">root universe <code>U0</code></span><button class="text-button" id="add-cell-button">+ Cell</button></div>
+                <div class="tree-list" id="tree-list" role="tree" aria-label="Geometry items"></div>
+                <div class="tree-section"><div class="tree-section-label"><span>Materials</span><button class="text-button" id="add-material-button">+ New</button></div><div id="material-list" class="material-list"></div></div>
+                <div class="occurrence-note" id="occurrence-note"><span class="note-icon" aria-hidden="true">⌘</span><span>Choose a repeated universe to edit the shared definition or this occurrence.</span></div>
+              </aside>
+
+              <section class="viewport-panel" aria-label="Geometry views">
+                <div class="viewport-toolbar">
+                  <div class="view-tabs" role="tablist" aria-label="View mode">
+                    <button role="tab" aria-selected="true" class="view-tab is-active" data-view="3d">3D</button>
+                    <button role="tab" aria-selected="false" class="view-tab" data-view="xy">XY</button>
+                    <button role="tab" aria-selected="false" class="view-tab" data-view="xz">XZ</button>
+                    <button role="tab" aria-selected="false" class="view-tab" data-view="yz">YZ</button>
+                  </div>
+              <div class="view-tools"><button class="small-icon-button" id="cutaway-button" aria-pressed="true" aria-label="Toggle cutaway view" title="Toggle cutaway">◐</button><button class="small-icon-button" id="explode-button" aria-pressed="false" aria-label="Toggle exploded view" title="Exploded view">⤢</button><button class="small-icon-button" id="measure-button" aria-pressed="false" aria-label="Toggle measurement mode" title="Measure">↔</button><button class="small-icon-button" id="rotate-button" aria-label="Rotate view one step" title="Rotate view one step">↻</button><button class="small-icon-button" id="fit-button" aria-label="Fit model to view" title="Fit view">⌗</button></div>
+                </div>
+                <div class="canvas-wrap" id="canvas-wrap">
+                  <canvas id="geometry-canvas" tabindex="0" aria-label="Canvas sketch of the selected model. Drag to rotate the 3D sketch or use the rotate and zoom controls."></canvas>
+                  <div class="canvas-overlay top-left"><span class="view-axis" id="axis-label">3D / ORBIT</span><span class="model-bounds" id="bounds-label">PIN CELL · 1.26 cm</span></div>
+                  <div class="canvas-overlay top-right"><button id="color-mode-button" class="overlay-select" aria-label="Color by material">Material <span aria-hidden="true">⌄</span></button></div>
+                  <div class="canvas-overlay bottom-left"><span class="legend-mark fuel"></span><span>Fuel</span><span class="legend-mark gap"></span><span>Gap</span><span class="legend-mark clad"></span><span>Clad</span><span class="legend-mark water"></span><span>Water</span></div>
+                  <div class="canvas-overlay bottom-right"><span id="pointer-coordinates">x 0.000 · y 0.000 cm</span><span class="canvas-separator"></span><button id="zoom-out" aria-label="Zoom out">−</button><span id="zoom-label">100%</span><button id="zoom-in" aria-label="Zoom in">+</button></div>
+                  <div class="canvas-empty" id="canvas-empty" hidden><span class="empty-symbol">◇</span><strong>No geometry yet</strong><span>Add a primitive or open a starter model.</span><button class="secondary-button" id="add-first-primitive">Add a cylinder</button></div>
+                </div>
+                  <div class="viewport-footer"><span><span class="status-dot"></span><span id="render-status">Model preview</span></span><span id="selection-status">Select a cell or surface</span><span class="renderer-note">Canvas sketch · no CSG kernel or transport solve</span></div>
+              </section>
+
+              <aside class="inspector properties-panel" aria-label="Selected item properties">
+                <div class="panel-heading"><div><span class="panel-kicker">INSPECTOR</span><h2 id="inspector-title">No selection</h2></div><button class="small-icon-button" id="inspector-menu" aria-label="More item actions">···</button></div>
+                <div id="inspector-content" class="inspector-content"><div class="inspector-placeholder"><span class="placeholder-ring">◎</span><p>Select an item in the tree or view to edit its dimensions.</p></div></div>
+              </aside>
+            </div>
+            <div class="bottom-dock">
+            <div class="dock-title"><span class="dock-led"></span><span id="dock-heading">MODEL STATUS</span><span id="status-count">4 cells · 4 materials</span></div>
+              <div class="dock-content" id="dock-content"><span>Ready to edit. Changes save automatically in this browser.</span><button id="validate-button" class="text-button">Check model structure <span aria-hidden="true">→</span></button></div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <input id="file-input" type="file" accept=".xml,.json,application/xml,application/json" multiple hidden aria-label="Choose geometry, materials or GM model files" />
+    <dialog class="sheet-dialog" id="export-dialog" aria-labelledby="export-dialog-title">
+      <form method="dialog"><button class="dialog-close" aria-label="Close export panel">×</button></form>
+      <div class="dialog-eyebrow">LOCAL EXPORT</div><h2 id="export-dialog-title">Take the model with you</h2>
+      <p>Files are generated in your browser. Geometry output is a starter subset; run your intended model through your installed OpenMC release before use.</p>
+      <div class="export-options">
+        <button class="export-option" data-export="geometry"><span class="file-type">XML</span><span><strong>geometry.xml</strong><small>Surfaces, cells & regions</small></span><span aria-hidden="true">↓</span></button>
+        <button class="export-option" data-export="materials"><span class="file-type">XML</span><span><strong>materials.xml</strong><small>Material definitions</small></span><span aria-hidden="true">↓</span></button>
+        <button class="export-option" data-export="python"><span class="file-type py">PY</span><span><strong>model.py</strong><small>Readable OpenMC Python starter</small></span><span aria-hidden="true">↓</span></button>
+        <button class="export-option" data-export="project"><span class="file-type json">GM</span><span><strong>model.gm.json</strong><small>Editable studio document</small></span><span aria-hidden="true">↓</span></button>
+      </div>
+      <div class="export-foot"><span class="local-lock" aria-hidden="true">⌑</span>Nothing is uploaded by this export.</div>
+    </dialog>
+    <dialog class="sheet-dialog notes-dialog" id="notes-dialog" aria-labelledby="notes-dialog-title"><form method="dialog"><button class="dialog-close" aria-label="Close model notes">×</button></form><div class="dialog-eyebrow">MODEL NOTES</div><h2 id="notes-dialog-title">About this geometry</h2><div id="notes-content"></div><button class="secondary-button dialog-done" id="notes-done">Close</button></dialog>
+    <dialog class="sheet-dialog add-dialog" id="add-dialog" aria-labelledby="add-dialog-title"><form method="dialog"><button class="dialog-close" aria-label="Close add item">×</button></form><div class="dialog-eyebrow">GEOMETRY</div><h2 id="add-dialog-title">Add an item</h2><p>Choose a bounded primitive to add to this model.</p><div class="primitive-grid"><button class="primitive-card" data-primitive="cylinder"><span>◉</span><strong>Finite cylinder</strong><small>Radius and height</small></button><button class="primitive-card" data-primitive="sphere"><span>●</span><strong>Sphere</strong><small>Center and radius</small></button><button class="primitive-card" data-primitive="box"><span>□</span><strong>Rectangular prism</strong><small>Width, depth and height</small></button><button class="primitive-card" data-primitive="lattice"><span>▦</span><strong>Rectangular lattice</strong><small>Pitch and repetitions</small></button></div><p class="dialog-hint">New items begin as named geometry surfaces. Assigning a material or adding the cell to a universe is the next step.</p></dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
