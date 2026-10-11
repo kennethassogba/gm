@@ -6,6 +6,7 @@ import {
   exportGeometryXML,
   exportMaterialsXML,
   exportPython,
+  focusBeavrsModel,
   importGeometryXML,
   validateModel
 } from "/model.js";
@@ -112,7 +113,7 @@ function templateCard(item) {
   const category = item.family === "components" ? "Component" : item.family === "benchmarks" ? "Benchmark" : "Architecture";
   const statusClass = item.kind === "editable" ? "editable" : item.kind === "reference" ? "reference" : "";
   const artClass = item.id === "hex19" || item.id === "fast-hex" ? "hex" : item.kind === "reference" ? "benchmark" : item.kind === "generic" ? "generic" : "";
-  const info = item.kind === "reference" ? `<button type="button" data-notes="${esc(item.id)}">View source & limits <span aria-hidden="true">↗</span></button>` : `<button type="button" data-open="${esc(item.id)}">${item.kind === "generic" ? "Open schematic" : "Open starter"} <span aria-hidden="true">→</span></button>`;
+  const info = item.kind === "reference" ? `<button type="button" data-notes="${esc(item.id)}">View source & limits <span aria-hidden="true">↗</span></button>` : `<button type="button" data-open="${esc(item.id)}">${item.id === "beavrs" ? "Open 2D slice" : item.kind === "generic" ? "Open schematic" : "Open starter"} <span aria-hidden="true">→</span></button>`;
   return `<article class="template-card" data-family="${esc(item.family)}">
     <div class="card-top"><span class="card-art ${artClass}" aria-hidden="true">${esc(item.glyph)}</span><span class="status-pill ${statusClass}">${esc(item.status)}</span></div>
     <h3>${esc(item.name)}</h3><p>${esc(item.subtitle)}</p>
@@ -166,7 +167,12 @@ function renderTree() {
   byId("status-count").textContent = `${model.cells.length} cells · ${model.materials.length} materials`;
 }
 
-function currentLattice() { return state.model?.lattices?.[0] ?? null; }
+function currentLattice() {
+  const model = state.model;
+  if (!model?.lattices?.length) return null;
+  if (Object.hasOwn(model, "activeLatticeId")) return model.lattices.find((item) => Number(item.id) === Number(model.activeLatticeId)) ?? null;
+  return model.lattices[0];
+}
 function getCell(id) { return state.model?.cells.find((cell) => String(cell.id) === String(id)); }
 function getSurface(id) { return state.model?.surfaces.find((surface) => String(surface.id) === String(id)); }
 function currentOccurrenceDimensions() {
@@ -185,13 +191,25 @@ function dimValue(key) {
   return surface?.params?.r ?? surface?.params?.x0 ?? 0;
 }
 function updateLatticePitch(model, value) {
-  const lattice = model.lattices?.[0];
+  const lattice = model.lattices?.find((item) => Number(item.id) === Number(model.activeLatticeId)) ?? model.lattices?.[0];
   if (!lattice) return;
   const pitch = Number(value);
   lattice.pitch = lattice.pitch.map(() => pitch);
   const [width, height] = lattice.dimension ?? [0, 0];
   lattice.lowerLeft = [-width * pitch / 2, -height * pitch / 2];
+  if (model.kind === "beavrs" && lattice.display === "core") {
+    model.dimensions.assemblyPitch = pitch;
+    model.dimensions.corePitch = pitch;
+    for (const surface of model.surfaces) {
+      if (surface.id === 40) surface.params.x0 = -width * pitch / 2;
+      if (surface.id === 41) surface.params.x0 = width * pitch / 2;
+      if (surface.id === 42) surface.params.y0 = -height * pitch / 2;
+      if (surface.id === 43) surface.params.y0 = height * pitch / 2;
+    }
+    return;
+  }
   model.dimensions.pitch = pitch;
+  if (model.kind === "beavrs") return;
   for (const surface of model.surfaces) {
     if (surface.name === "Pin box · west") surface.params.x0 = -pitch / 2;
     if (surface.name === "Pin box · east") surface.params.x0 = pitch / 2;
@@ -259,10 +277,12 @@ function renderCellInspector(cell) {
   const sourceSurfaces = selectedCellSurfaceIds(cell).map(getSurface).filter(Boolean);
   const radiusKey = cell.role === "fuel" ? "fuelRadius" : cell.role === "gap" ? "gapRadius" : cell.role === "clad" ? "cladRadius" : null;
   const label = cell.role === "fuel" ? "Fuel radius" : cell.role === "gap" ? "Gap radius" : cell.role === "clad" ? "Cladding radius" : "Boundary";
-  const dimControl = radiusKey ? rangeRow(radiusKey, label, 0.25, 0.62, 0.001) : cell.role === "water" ? rangeRow("pitch", "Pin pitch", 0.8, 2.2, 0.005) : "";
+  const dimControl = radiusKey ? rangeRow(radiusKey, label, 0.25, 0.62, 0.001) : cell.role === "water" && state.model.kind !== "beavrs" ? rangeRow("pitch", "Pin pitch", 0.8, 2.2, 0.005) : "";
   const regions = `<div class="property-block"><div class="property-label"><span>Region</span><small>OpenMC half-spaces</small></div><div class="formula">${esc(cell.region || "whole universe")}</div><div class="metadata-note">Shift-select two surfaces in the tree to combine their regions with a Boolean operation.</div></div>`;
   const lattice = currentLattice();
-  const occurrenceEditor = lattice ? `<div class="property-block"><div class="property-label"><span>Repeated universe</span><small>${lattice.instanceEdit === "occurrence" ? "one position" : "shared definition"}</small></div><div class="shared-edit"><label><input type="radio" name="instance-scope" value="shared" ${lattice.instanceEdit !== "occurrence" ? "checked" : ""} /> Edit shared universe</label><label><input type="radio" name="instance-scope" value="occurrence" ${lattice.instanceEdit === "occurrence" ? "checked" : ""} ${modelOccurrenceReady() ? "" : "disabled"} /> Edit selected occurrence</label></div><div class="metadata-note">${modelOccurrenceReady() ? `Selected position: ${state.model.activeOccurrence?.x ?? "—"}, ${state.model.activeOccurrence?.y ?? "—"}.` : "Select a pin in the lattice view to edit one occurrence."}</div></div>` : "";
+  const occurrenceEditor = state.model.kind === "beavrs"
+    ? `<div class="property-block"><div class="property-label"><span>Repeated pin</span><small>shared universe U2</small></div><div class="metadata-note">Radius edits update the shared pin in this representative layout. Editing one pin occurrence is not available in this slice.</div></div>`
+    : lattice ? `<div class="property-block"><div class="property-label"><span>Repeated universe</span><small>${lattice.instanceEdit === "occurrence" ? "one position" : "shared definition"}</small></div><div class="shared-edit"><label><input type="radio" name="instance-scope" value="shared" ${lattice.instanceEdit !== "occurrence" ? "checked" : ""} /> Edit shared universe</label><label><input type="radio" name="instance-scope" value="occurrence" ${lattice.instanceEdit === "occurrence" ? "checked" : ""} ${modelOccurrenceReady() ? "" : "disabled"} /> Edit selected occurrence</label></div><div class="metadata-note">${modelOccurrenceReady() ? `Selected position: ${state.model.activeOccurrence?.x ?? "—"}, ${state.model.activeOccurrence?.y ?? "—"}.` : "Select a pin in the lattice view to edit one occurrence."}</div></div>` : "";
   return `<div class="property-block"><label class="property-label" for="cell-name"><span>Name</span><small>cell ${esc(cell.id)}</small></label><div class="property-field"><input id="cell-name" value="${esc(cell.name)}" aria-label="Cell name" /></div></div>
     <div class="property-block"><label class="property-label" for="cell-material"><span>Material</span><small>${esc(cell.materialKey || "CSG")}</small></label><div class="property-field"><select id="cell-material" aria-label="Cell material"><option value="" ${cell.material == null ? "selected" : ""}>Void</option>${state.model.materials.map((m) => `<option value="${Number(m.id)}" ${Number(m.id) === Number(cell.material) ? "selected" : ""}>${esc(m.name)}</option>`).join("")}</select></div></div>
     <div class="property-block"><div class="property-label"><span>Dimensions</span><span class="unit-switch" role="group" aria-label="Length unit"><button type="button" class="is-active" data-units="cm" aria-pressed="true">cm</button><button type="button" data-units="mm" aria-pressed="false">mm</button></span></div><div class="dimension-list">${dimControl || `<span class="material-row">No parametric dimension is linked to this cell.</span>`}</div>${sourceSurfaces.length ? `<div class="metadata-note">Bound by ${sourceSurfaces.map((item) => esc(item.name)).join(", ")}.</div>` : ""}</div>
@@ -286,9 +306,14 @@ function renderSurfaceInspector(surface) {
 }
 
 function renderLatticeInspector(lattice) {
-  return `<div class="property-block"><div class="property-label"><span>Layout</span><small>${esc(lattice.type)}</small></div><div class="dimension-list"><div class="dimension-control"><label><span>Positions</span><span>${lattice.cells.length}</span></label></div><div class="dimension-control"><label for="lattice-pitch"><span>Pitch</span><span>cm</span></label><div class="range-line"><input type="range" id="lattice-pitch" min="0.4" max="2.5" step="0.01" value="${Number(lattice.pitch[0])}" aria-label="Lattice pitch" /><output for="lattice-pitch">${Number(lattice.pitch[0]).toFixed(2)} cm</output></div></div></div></div>
+  const pitchLabel = state.model.kind === "beavrs" && lattice.display === "core" ? "Assembly pitch" : state.model.kind === "beavrs" ? "Fuel-pin pitch" : "Pitch";
+  const minPitch = state.model.kind === "beavrs" && lattice.display === "core" ? 20 : 0.4;
+  const maxPitch = state.model.kind === "beavrs" && lattice.display === "core" ? 23 : state.model.kind === "beavrs" ? 1.5 : 2.5;
+  const pitchStep = state.model.kind === "beavrs" ? 0.0001 : 0.01;
+  const sharedNote = state.model.kind === "beavrs" ? "This lattice is a shared OpenMC universe. Changes to its pitch apply to all matching positions." : "Repeated cells point to universe definitions. Editing U1 updates each position that uses it.";
+  return `<div class="property-block"><div class="property-label"><span>Layout</span><small>${esc(lattice.type)}</small></div><div class="dimension-list"><div class="dimension-control"><label><span>Positions</span><span>${lattice.cells.length}</span></label></div><div class="dimension-control"><label for="lattice-pitch"><span>${pitchLabel}</span><span>cm</span></label><div class="range-line"><input type="range" id="lattice-pitch" min="${minPitch}" max="${maxPitch}" step="${pitchStep}" value="${Number(lattice.pitch[0])}" aria-label="${pitchLabel}" /><output for="lattice-pitch">${Number(lattice.pitch[0]).toFixed(4)} cm</output></div></div></div></div>
     <div class="property-block"><div class="property-label"><span>Editing scope</span><small>${lattice.instanceEdit === "occurrence" ? "single occurrence" : "shared universe"}</small></div><div class="shared-edit"><label><input type="radio" name="lattice-scope" value="shared" ${lattice.instanceEdit !== "occurrence" ? "checked" : ""} /> Edit shared universe</label><label><input type="radio" name="lattice-scope" value="occurrence" ${lattice.instanceEdit === "occurrence" ? "checked" : ""} ${modelOccurrenceReady() ? "" : "disabled"} /> Edit selected occurrence</label></div><div class="metadata-note">${modelOccurrenceReady() ? `Position ${state.model.activeOccurrence.x + 1}, ${state.model.activeOccurrence.y + 1}.` : "Select a position in the view to set a single occurrence."}</div></div>
-    <div class="property-block"><div class="property-label"><span>Fill universes</span><small>reused</small></div><div class="formula">${esc([...new Set(lattice.universes ?? lattice.cells.map((cell) => cell.universe))].map((id) => `U${id}`).join("  ·  "))}</div><div class="metadata-note">Repeated cells point to universe definitions. Editing U1 updates each position that uses it.</div></div>`;
+    <div class="property-block"><div class="property-label"><span>Fill universes</span><small>reused</small></div><div class="formula">${esc([...new Set(lattice.universes ?? lattice.cells.map((cell) => cell.universe))].map((id) => `U${id}`).join("  ·  "))}</div><div class="metadata-note">${sharedNote}</div></div>`;
 }
 
 function renderInspector() {
@@ -324,10 +349,14 @@ function renderStudio() {
   const model = state.model;
   if (!model) return;
   byId("model-title").textContent = model.name;
-  const statusLabel = model.metadata?.status === "illustrative" ? "Illustrative geometry" : model.metadata?.status === "schematic" ? "Schematic lattice" : model.metadata?.status === "imported subset" ? "Imported XML subset" : model.kind === "empty" ? "Empty CSG model" : "Starter CSG subset";
+  const statusLabel = model.metadata?.status === "benchmark-slice" ? "Source-based 2D slice · simplified" : model.metadata?.status === "illustrative" ? "Illustrative geometry" : model.metadata?.status === "schematic" ? "Schematic lattice" : model.metadata?.status === "imported subset" ? "Imported XML subset" : model.kind === "empty" ? "Empty CSG model" : "Starter CSG subset";
   byId("model-subtitle").textContent = `${statusLabel} · cm`;
-  byId("occurrence-note").hidden = !model.lattices?.length;
-  byId("render-status").textContent = model.metadata?.status === "illustrative" ? "Illustrative preview" : model.metadata?.status === "schematic" ? "Schematic preview" : "Model preview";
+  const occurrenceNote = byId("occurrence-note");
+  occurrenceNote.hidden = !model.lattices?.length;
+  occurrenceNote.innerHTML = model.kind === "beavrs"
+    ? `<span class="note-icon" aria-hidden="true">⌘</span><span>One representative 17 × 17 layout stands in for the core entries. Fuel-pin edits change shared universe U2; per-occurrence edits are unavailable.</span>`
+    : `<span class="note-icon" aria-hidden="true">⌘</span><span>Choose a repeated universe to edit the shared definition or this occurrence.</span>`;
+  byId("render-status").textContent = model.metadata?.status === "benchmark-slice" ? "BEAVRS source slice · OpenMC not run" : model.metadata?.status === "illustrative" ? "Illustrative preview" : model.metadata?.status === "schematic" ? "Schematic preview" : "Model preview";
   byId("canvas-empty").hidden = Boolean(model.surfaces.length);
   renderTree(); renderInspector(); drawCanvas(); updateHistoryButtons();
   const current = document.querySelector(`.view-tab[data-view="${CSS.escape(model.view || "3d")}"]`);
@@ -343,11 +372,35 @@ function renderStudio() {
   byId("axis-label").textContent = model.view === "3d" ? "3D SKETCH / ORBIT" : `${model.view.toUpperCase()} / SECTION`;
   const lattice = currentLattice();
   byId("bounds-label").textContent = lattice ? `${lattice.dimension?.join(" × ") ?? lattice.cells.length} · ${Number(lattice.pitch[0]).toFixed(2)} cm pitch` : `PIN CELL · ${Number(model.dimensions?.pitch ?? 1).toFixed(2)} cm`;
-  byId("selection-status").textContent = model.activeOccurrence ? `Position ${model.activeOccurrence.x + 1}, ${model.activeOccurrence.y + 1}` : model.selection?.kind === "cell" ? getCell(model.selection.id)?.name ?? "Cell selected" : model.selection?.kind === "surface" ? getSurface(model.selection.id)?.name ?? "Surface selected" : "Select a cell or surface";
+  const focusedAssembly = model.kind === "beavrs" && model.activeLatticeId === 21 ? model.focusPath?.assembly : null;
+  byId("selection-status").textContent = model.activeOccurrence
+    ? `Position ${model.activeOccurrence.x + 1}, ${model.activeOccurrence.y + 1}`
+    : focusedAssembly
+      ? `Map entry ${focusedAssembly.position}`
+      : model.selection?.kind === "cell"
+        ? getCell(model.selection.id)?.name ?? "Cell selected"
+        : model.selection?.kind === "surface"
+          ? getSurface(model.selection.id)?.name ?? "Surface selected"
+          : "Select a cell or surface";
   byId("zoom-label").textContent = `${Math.round((model.zoom || 1) * 100)}%`;
   byId("pointer-coordinates").textContent = model.lastPoint ?? "x 0.000 · y 0.000 cm";
+  renderFocusPath();
   const firstCell = model.cells[0];
   if (!firstCell && !model.surfaces.length) byId("canvas-empty").hidden = false;
+}
+
+function renderFocusPath() {
+  const path = byId("focus-path");
+  const model = state.model;
+  if (!path) return;
+  if (model?.kind !== "beavrs") { path.hidden = true; path.innerHTML = ""; return; }
+  path.hidden = false;
+  const assembly = model.focusPath?.assembly;
+  const pin = model.focusPath?.pin;
+  const coreStep = `<button type="button" class="path-step" data-focus-step="core" ${model.activeLatticeId === 20 ? 'aria-current="step"' : ""}>Core · 19 × 19</button>`;
+  const assemblyStep = assembly ? `<span class="path-separator" aria-hidden="true">/</span><button type="button" class="path-step" data-focus-step="assembly" ${model.activeLatticeId === 21 ? 'aria-current="step"' : ""}>Map entry ${esc(assembly.position)}</button>` : "";
+  const pinStep = pin ? `<span class="path-separator" aria-hidden="true">/</span><span class="path-current">Fuel pin · ${pin.x + 1}, ${pin.y + 1}</span>` : "";
+  path.innerHTML = `${coreStep}${assemblyStep}${pinStep}<span class="path-hint">Representative layout · shared pins</span>`;
 }
 
 function render() {
@@ -414,9 +467,8 @@ function drawPinXY(ctx, width, height, dpr, dimensions) {
   else if (role === "clad") drawSurfaceRing(ctx, cx, cy, outer + 4, "#fff1db", true);
   else if (role === "gap") drawSurfaceRing(ctx, cx, cy, (fuel + gap) / 2, "#ffffff", true);
   drawAxes(ctx, cx, cy, span);
-  ctx.fillStyle = "#d4e1e4"; ctx.font = "10px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "center";
+  ctx.fillStyle = "#d4e1e4"; ctx.font = "12px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "center";
   ctx.fillText(`r ${Number(dimensions.cladRadius || .475).toFixed(3)} cm`, cx, cy + outer + 26);
-  ctx.fillStyle = "#93aab2"; ctx.fillText("XY · pin cross-section", cx, 27);
 }
 
 function drawAxes(ctx, cx, cy, size) {
@@ -424,7 +476,7 @@ function drawAxes(ctx, cx, cy, size) {
   ctx.lineWidth = 1;
   ctx.strokeStyle = "#78a9b0"; ctx.beginPath(); ctx.moveTo(cx - a, cy); ctx.lineTo(cx + a, cy); ctx.stroke();
   ctx.strokeStyle = "#ba9473"; ctx.beginPath(); ctx.moveTo(cx, cy - a); ctx.lineTo(cx, cy + a); ctx.stroke();
-  ctx.font = "9px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "left";
+  ctx.font = "12px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "left";
   ctx.fillStyle = "#9bcbd0"; ctx.fillText("x", cx + a + 5, cy + 3); ctx.fillStyle = "#d7ad89"; ctx.fillText("y", cx + 4, cy - a - 5);
 }
 
@@ -451,7 +503,7 @@ function drawPinSide(ctx, width, height, dimensions, axis) {
   const role = activeRole();
   const radius = role === "fuel" ? fuel : role === "gap" ? gap : clad;
   if (role) { ctx.strokeStyle = "#fff0dc"; ctx.lineWidth = 1.5; ctx.strokeRect(cx - radius - 2, y0 - 2, radius * 2 + 4, axialHeight + 4); }
-  ctx.fillStyle = "#d4e1e4"; ctx.font = "10px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "center";
+  ctx.fillStyle = "#d4e1e4"; ctx.font = "12px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "center";
   ctx.fillText(`${axis.toUpperCase()}Z · axial section`, cx, 26);
   ctx.fillStyle = "#9bb1b8"; ctx.fillText(`${Number(dimensions.height || 30).toFixed(1)} cm`, cx + span / 2 + 25, cy + 3);
   ctx.fillText("fuel", cx, cy + 4);
@@ -502,7 +554,7 @@ function drawPin3D(ctx, width, height, dimensions) {
     const index = role === "fuel" ? 2 : role === "clad" ? 0 : 1;
     ctx.beginPath(); ctx.ellipse(cx, topY, radii[index] + 4, ry * (radii[index] / radii[0]) + 3, 0, 0, Math.PI * 2); ctx.strokeStyle = "#fff0d7"; ctx.lineWidth = 2; ctx.stroke();
   }
-  ctx.fillStyle = "#d7e4e7"; ctx.font = "10px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "left";
+  ctx.fillStyle = "#d7e4e7"; ctx.font = "12px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "left";
   ctx.fillText(`OD ${Number(dimensions.cladRadius || .475).toFixed(3)} cm`, cx + radii[0] + 21, topY + bodyH * .53);
   ctx.fillStyle = "#8fa8af"; ctx.fillText("DRAG TO ORBIT · SCROLL TO ZOOM", 18, height - 38);
   ctx.strokeStyle = "#7fb6bc"; ctx.beginPath(); ctx.moveTo(cx - radii[0], topY - 26); ctx.lineTo(cx + radii[0], topY - 26); ctx.moveTo(cx - radii[0], topY - 31); ctx.lineTo(cx - radii[0], topY - 21); ctx.moveTo(cx + radii[0], topY - 31); ctx.lineTo(cx + radii[0], topY - 21); ctx.stroke();
@@ -521,7 +573,18 @@ function drawLattice(ctx, width, height, lattice) {
     const x = point.x, y = point.y;
     const key = isHex ? `${item.q},${item.r}` : `${item.x},${item.y}`;
     const selected = state.model.activeOccurrence && (isHex ? `${state.model.activeOccurrence.x},${state.model.activeOccurrence.y}` === key : state.model.activeOccurrence.x === item.x && state.model.activeOccurrence.y === item.y);
-    if (state.model.view === "3d") {
+    if (lattice.display === "core" && state.model.view !== "3d") {
+      const tile = Math.max(2, cell * .88);
+      ctx.fillStyle = item.role === "assembly" ? "#b96d42" : "#28434d";
+      ctx.fillRect(x - tile / 2, y - tile / 2, tile, tile);
+      ctx.strokeStyle = selected ? "#fff1d9" : item.role === "assembly" ? "#e5a16e" : "#48636b";
+      ctx.lineWidth = selected ? 2 : .65;
+      ctx.strokeRect(x - tile / 2, y - tile / 2, tile, tile);
+      if (item.role === "assembly" && tile > 14) {
+        ctx.fillStyle = "#f7cfaa";
+        ctx.beginPath(); ctx.arc(x, y, Math.min(2.2, tile * .11), 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (state.model.view === "3d") {
       const depth = cell * .22;
       ctx.beginPath(); ctx.moveTo(x, y - cell * .44); ctx.lineTo(x + cell * .5, y - depth); ctx.lineTo(x, y + depth); ctx.lineTo(x - cell * .5, y - depth); ctx.closePath();
       ctx.fillStyle = item.role === "fuel" ? "#bd7244" : item.role === "water" ? "#46717f" : "#3d7377"; ctx.fill();
@@ -544,8 +607,11 @@ function drawLattice(ctx, width, height, lattice) {
       ctx.strokeStyle = selected ? "#fff1d9" : "rgba(186,219,220,.7)"; ctx.lineWidth = selected ? 2 : .7; ctx.stroke();
     }
   }
-  if (state.model.view === "3d") {
-    ctx.textAlign = "center"; ctx.font = "10px ui-monospace, SFMono-Regular, monospace"; ctx.fillStyle = "#cad9dc";
+  if (lattice.display === "core" && state.model.view !== "3d") {
+    ctx.textAlign = "center"; ctx.font = "12px ui-monospace, SFMono-Regular, monospace"; ctx.fillStyle = "#cad9dc";
+    ctx.fillText("CORE POSITION MAP · 193 ASSEMBLIES", cx, 28);
+  } else if (state.model.view === "3d") {
+    ctx.textAlign = "center"; ctx.font = "12px ui-monospace, SFMono-Regular, monospace"; ctx.fillStyle = "#cad9dc";
     ctx.fillText(lattice.name, cx, 28); ctx.fillStyle = "#94aab1"; ctx.fillText("REPEATED UNIVERSE · CLICK A POSITION", cx, height - 20);
   }
 }
@@ -571,9 +637,9 @@ function drawCanvas() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   gridBackground(ctx, width, height, dpr);
   const model = state.model;
-  const lattice = model.lattices?.[0];
+  const lattice = currentLattice();
   if (!model.surfaces.length && !lattice) return;
-  if (lattice && (model.kind === "lattice" || model.kind === "hex" || model.kind === "architecture")) drawLattice(ctx, width, height, lattice);
+  if (lattice && (model.kind === "lattice" || model.kind === "hex" || model.kind === "architecture" || model.kind === "beavrs")) drawLattice(ctx, width, height, lattice);
   else if (model.view === "xy") drawPinXY(ctx, width, height, dpr, currentOccurrenceDimensions());
   else if (model.view === "xz" || model.view === "yz") drawPinSide(ctx, width, height, currentOccurrenceDimensions(), model.view);
   else drawPin3D(ctx, width, height, currentOccurrenceDimensions());
@@ -583,10 +649,11 @@ function resizeCanvas() { drawCanvas(); }
 
 function renderNotes(item) {
   const benchmark = BENCHMARKS.find((entry) => entry.id === item.id);
-  const note = benchmark?.simplification ?? item.note ?? "No further notes are available.";
-  const source = benchmark?.source ?? item.source ?? "GM Studio";
-  const version = benchmark?.version ?? (item.kind === "generic" ? "Generic illustration" : "Starter geometry");
-  const href = benchmark?.href;
+  const selectedBeavrs = state.model?.kind === "beavrs" && item.id === "beavrs";
+  const note = selectedBeavrs ? state.model.metadata.notes : benchmark?.simplification ?? item.note ?? "No further notes are available.";
+  const source = selectedBeavrs ? state.model.metadata.source : benchmark?.source ?? item.source ?? "GM Studio";
+  const version = selectedBeavrs ? state.model.metadata.sourceVersion : benchmark?.version ?? (item.kind === "generic" ? "Generic illustration" : "Starter geometry");
+  const href = selectedBeavrs ? state.model.metadata.sourceUrl : benchmark?.href;
   byId("notes-content").innerHTML = `<p><strong>Type:</strong> ${esc(item.kind === "reference" ? "Benchmark source reference" : item.kind === "generic" ? "Illustrative architecture" : "Editable starter")}</p><p><strong>Source:</strong> ${esc(source)}</p><p><strong>Version:</strong> ${esc(version)}</p><p><strong>In this workspace:</strong> ${esc(note)}</p>${href ? `<p><a href="${esc(href)}" target="_blank" rel="noopener noreferrer">Open source specification ↗</a></p>` : ""}`;
   byId("notes-dialog-title").textContent = item.kind === "reference" ? `${item.name} · source` : `${item.name} · notes`;
   byId("notes-dialog").showModal();
@@ -797,6 +864,30 @@ function chooseLatticePosition(event) {
     if (d < distance) { distance = d; chosen = item; }
   }
   if (chosen && distance < size * .6) {
+    if (state.model.kind === "beavrs" && lattice.display === "core") {
+      mutate((model) => {
+        if (chosen.role === "assembly") {
+          model.focusPath = { assembly: { position: chosen.position, x: chosen.x, y: chosen.y }, pin: null };
+          model.activeLatticeId = 21;
+          model.activeOccurrence = null;
+          model.selection = { kind: "lattice", id: 21, surfaceIds: [] };
+        } else {
+          model.activeOccurrence = { x: chosen.x, y: chosen.y, universe: chosen.universe };
+          model.selection = { kind: "cell", id: 14, surfaceIds: [] };
+        }
+      }, { record: false });
+      return true;
+    }
+    if (state.model.kind === "beavrs" && lattice.display === "assembly") {
+      mutate((model) => {
+        model.focusPath.pin = { x: chosen.x, y: chosen.y, role: chosen.role };
+        model.activeLatticeId = null;
+        model.activeOccurrence = { x: chosen.x, y: chosen.y, universe: chosen.universe };
+        model.selection = { kind: "cell", id: chosen.role === "fuel" ? 10 : 14, surfaceIds: [] };
+        model.view = "xy";
+      }, { record: false });
+      return true;
+    }
     mutate((model) => {
       model.activeOccurrence = isHex ? { x: chosen.q, y: chosen.r, universe: chosen.universe } : { x: chosen.x, y: chosen.y, universe: chosen.universe };
       model.selection = { kind: "cell", id: chosen.universe === 1 ? 1 : 5, surfaceIds: [] };
@@ -892,6 +983,23 @@ function initializeBindings() {
     const delSurface = event.target.closest("[data-delete-surface]"); if (delSurface) deleteSurface(delSurface.dataset.deleteSurface);
     const unit = event.target.closest("[data-units]"); if (unit) { document.querySelectorAll("[data-units]").forEach((button) => { button.classList.toggle("is-active", button === unit); button.setAttribute("aria-pressed", String(button === unit)); }); }
   });
+  byId("focus-path").addEventListener("click", (event) => {
+    const step = event.target.closest("[data-focus-step]")?.dataset.focusStep;
+    if (!step || state.model?.kind !== "beavrs") return;
+    mutate((model) => {
+      if (step === "core") {
+        model.activeLatticeId = 20;
+        model.focusPath = { assembly: null, pin: null };
+        model.activeOccurrence = null;
+        model.selection = { kind: "lattice", id: 20, surfaceIds: [] };
+      } else if (step === "assembly" && model.focusPath?.assembly) {
+        model.activeLatticeId = 21;
+        model.focusPath.pin = null;
+        model.activeOccurrence = null;
+        model.selection = { kind: "lattice", id: 21, surfaceIds: [] };
+      }
+    }, { record: false });
+  });
   document.querySelectorAll(".view-tab").forEach((button) => {
     button.addEventListener("click", () => mutate((model) => { model.view = button.dataset.view; }, { record: false }));
     button.addEventListener("keydown", (event) => { if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return; event.preventDefault(); const tabs = [...document.querySelectorAll(".view-tab")]; const i = tabs.indexOf(button); const index = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (i + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length; tabs[index].focus(); tabs[index].click(); });
@@ -950,6 +1058,7 @@ function setupAgentAPI() {
     listTemplates: () => STARTERS.map(({ id, name, family, kind, status, subtitle }) => ({ id, name, family, kind, status, subtitle })),
     getModel: () => state.model ? clone(state.model) : null,
     selectTemplate: (id) => { const model = createModelForTemplate(id); if (!model) throw new Error("This entry is a reference, not a bundled model."); openModel(model); return clone(state.model); },
+    focus: (level, x, y) => { if (!state.model) throw new Error("Open a model first."); mutate((model) => focusBeavrsModel(model, { level, x, y })); return clone(state.model); },
     setDimension: (key, value) => { if (!state.model) throw new Error("Open a model first."); setDimension(key, value); return clone(state.model); },
     selectView: (view) => { if (!["3d", "xy", "xz", "yz"].includes(view)) throw new Error("Choose 3d, xy, xz or yz."); if (!state.model) throw new Error("Open a model first."); mutate((model) => { model.view = view; }, { record: false }); return view; },
     validate: () => state.model ? validateModel(state.model) : ["Open a model first."],
@@ -962,6 +1071,7 @@ function setupAgentAPI() {
     try {
       context.registerTool({ name: "geometry_catalog", description: "List available OpenMC geometry starters and source references.", inputSchema: { type: "object", properties: {} }, execute: () => api.listTemplates() });
       context.registerTool({ name: "geometry_read_current", description: "Read the current local model document in this browser tab.", inputSchema: { type: "object", properties: {} }, execute: () => api.getModel() });
+      context.registerTool({ name: "geometry_focus", description: "Focus the core, an assembly row/column, or a pin row/column in the editable BEAVRS 2D slice. Lattice coordinates are zero-based.", inputSchema: { type: "object", required: ["level"], properties: { level: { type: "string", enum: ["core", "assembly", "pin"] }, x: { type: "integer", description: "Zero-based column; required for assembly or pin." }, y: { type: "integer", description: "Zero-based row; required for assembly or pin." } } }, execute: ({ level, x, y }) => api.focus(level, x, y) });
       context.registerTool({ name: "geometry_set_dimension", description: "Set a named dimension on the current local model.", inputSchema: { type: "object", required: ["key", "value"], properties: { key: { type: "string", enum: ["fuelRadius", "gapRadius", "cladRadius", "pitch"] }, value: { type: "number" } } }, execute: ({ key, value }) => api.setDimension(key, value) });
       context.registerTool({ name: "geometry_validate_structure", description: "Check cell, material and surface references without running OpenMC.", inputSchema: { type: "object", properties: {} }, execute: () => api.validate() });
     } catch (error) { console.warn("Optional browser WebMCP registration was unavailable.", error); }

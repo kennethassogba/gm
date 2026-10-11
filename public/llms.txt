@@ -11,6 +11,8 @@ GM Studio is a browser workspace for inspecting and editing a small set of OpenM
 - MCP endpoint: https://gm.keff.uk/api/mcp
 - MCP server card: https://gm.keff.uk/.well-known/mcp.json
 
-This preview uses a Canvas sketch. It does not contain the planned C++/WebAssembly geometry kernel, a GPU CSG renderer, a BEAVRS model, or an OpenMC runtime. Benchmark cards are source references only. Generic reactor layouts are schematic.
+This preview uses a Canvas sketch and includes a source-based, simplified BEAVRS 2D slice. The slice keeps the public 19×19 core position map and one representative 17×17 pin-layout template shared across all 193 map entries. It edits selected pin dimensions; assembly-specific loading, enrichment zoning, baffle materials, control rods, burnable absorbers, instrumentation variants and boron are omitted. It does not contain the planned C++/WebAssembly geometry kernel, a GPU CSG renderer, or an OpenMC runtime. C5G7 and Takeda cards remain source references. Generic reactor layouts are schematic.
+
+The stateless MCP endpoint offers catalog.list, geometry.template, geometry.focus, geometry.validate and geometry.export. Geometry validation does not invoke OpenMC; generated XML has not been checked against an installed OpenMC release.
 
 Model edits and browser autosaves stay on the device. Files supplied to the agent endpoint are processed for that request and are not stored by this app.
