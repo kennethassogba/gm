@@ -469,7 +469,6 @@ function drawPinXY(ctx, width, height, dpr, dimensions) {
   drawAxes(ctx, cx, cy, span);
   ctx.fillStyle = "#d4e1e4"; ctx.font = "12px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "center";
   ctx.fillText(`r ${Number(dimensions.cladRadius || .475).toFixed(3)} cm`, cx, cy + outer + 26);
-  ctx.fillStyle = "#93aab2"; ctx.fillText("XY · pin cross-section", cx, 27);
 }
 
 function drawAxes(ctx, cx, cy, size) {

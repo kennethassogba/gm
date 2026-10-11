@@ -155,7 +155,7 @@ h1[tabindex="-1"]:focus-visible { outline: 3px solid #176a78; outline-offset: 4p
 .panel-heading h2 { overflow: hidden; max-width: 185px; margin: 4px 0 0; font-size: 13px; letter-spacing: -.015em; text-overflow: ellipsis; white-space: nowrap; }
 .small-icon-button { width: 30px; height: 30px; color: #53646d; font-size: 16px; }
 .tree-toolbar { display: flex; align-items: center; justify-content: space-between; min-height: 39px; padding: 0 12px; color: #66767e; background: #fbfcfc; border-bottom: 1px solid #edf0f1; font-size: 12px; }
-.tree-location code { margin-left: 4px; padding: 2px 4px; color: #52636c; background: #eef2f3; border-radius: 4px; font-size: 9px; }
+.tree-location code { margin-left: 4px; padding: 2px 4px; color: #52636c; background: #eef2f3; border-radius: 4px; font-size: 12px; }
 .text-button { padding: 4px 6px; color: #8b461f; background: transparent; border: 0; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 650; }
 .text-button:hover { background: #fff1e7; }
 .tree-list { display: grid; gap: 2px; padding: 8px 7px 12px; }
