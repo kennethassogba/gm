@@ -6,7 +6,7 @@ export const BENCHMARKS = [
     version: "BEAVRS specification 2.0.2",
     href: "https://github.com/mit-crpg/BEAVRS",
     sourceNote: "Public benchmark repository and specification. The archive is not bundled here.",
-    simplification: "No BEAVRS core is loaded by this starter. Use the linked specification and source files to build or import a model."
+    simplification: "The editable slice uses the public 19×19 core map and one representative 17×17 pin-layout template shared across its 193 map positions, with BEAVRS pin pitch and radii and a 10 cm reflective axial slice. It applies one 3.1% UO₂ recipe throughout. Assembly-specific loading, baffles, enrichment zoning, control rods, burnable absorbers, instrumentation variants and 975 ppm boron are omitted; this is not a full BEAVRS input or transport benchmark."
   },
   {
     id: "c5g7-2d", family: "benchmarks", name: "C5G7 · 2D",
@@ -42,13 +42,45 @@ export const STARTERS = [
   { id: "pwr17", family: "components", name: "PWR 17 × 17", subtitle: "Repeated pin universe in a rectangular lattice", status: "Schematic lattice", kind: "editable", glyph: "▦", modelType: "pwr17", note: "17 × 17 display grid with shared pin universe. The guide and instrument positions are schematic, not a licensed assembly specification." },
   { id: "bwr9", family: "components", name: "BWR assembly", subtitle: "Rectangular lattice starter", status: "Schematic lattice", kind: "editable", glyph: "▦", modelType: "bwr9", note: "Simplified lattice illustration. Water rods, channel box, enrichment zones and operating details are not modeled." },
   { id: "hex19", family: "components", name: "Hexagonal lattice", subtitle: "19 positions · shared pin universe", status: "Editable starter", kind: "editable", glyph: "⬡", modelType: "hex19", note: "Small hexagonal repetition example. It is a geometry exercise, not a reactor or benchmark input." },
-  ...BENCHMARKS.map((entry) => ({ ...entry, status: "Source reference", kind: "reference", glyph: entry.id.startsWith("c5g7") ? "▤" : "◎" })),
+  ...BENCHMARKS.map((entry) => ({ ...entry, status: entry.id === "beavrs" ? "Editable 2D slice" : "Source reference", kind: entry.id === "beavrs" ? "editable" : "reference", modelType: entry.id === "beavrs" ? "beavrs-2d" : undefined, glyph: entry.id.startsWith("c5g7") ? "▤" : "◎" })),
   { id: "pwr-core", family: "architectures", name: "PWR", subtitle: "Generic pressurised-water layout", status: "Illustrative", kind: "generic", glyph: "◉", modelType: "pwr-core", note: "Generic core outline only. Not a reactor design, safety analysis model or benchmark." },
   { id: "bwr-core", family: "architectures", name: "BWR", subtitle: "Generic boiling-water layout", status: "Illustrative", kind: "generic", glyph: "◉", modelType: "bwr-core", note: "Generic core outline only. Not a reactor design, safety analysis model or benchmark." },
   { id: "candu", family: "architectures", name: "CANDU", subtitle: "Generic pressure-tube layout", status: "Illustrative", kind: "generic", glyph: "◉", modelType: "candu", note: "Generic pressure-tube layout, shown as a spacing exercise. Not a reactor design or analysis model." },
   { id: "fast-hex", family: "architectures", name: "Fast reactor · hexagonal", subtitle: "Generic hexagonal core layout", status: "Illustrative", kind: "generic", glyph: "⬡", modelType: "fast-hex", note: "Generic hexagonal layout. Fuel, blanket, reflector and control zoning are not specified." },
   { id: "htgr", family: "architectures", name: "HTGR", subtitle: "Generic graphite-block layout", status: "Illustrative", glyph: "▦", kind: "generic", modelType: "htgr", note: "Generic block lattice illustration. Fuel compact construction, burnable poisons and graphite grades are not specified." }
 ];
+
+// Position map transcribed from MIT CRPG's public BEAVRS OpenMC generator.
+// The editor keeps the assembly identifiers and locations; it does not model
+// the source generator's baffle, control-rod, burnable-absorber or enrichment
+// variants in this first editable slice.
+const BEAVRS_CORE_ROWS = [
+  "dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy",
+  "dummy dummy dummy dummy dummy bafnw bafn_ bafn_ bafn_ bafn_ bafn_ bafn_ bafn_ bafne dummy dummy dummy dummy dummy",
+  "dummy dummy dummy bafnw bafn_ bfcnw L___1 K___1 J___1 H___1 G___1 F___1 E___1 bfcne bafn_ bafne dummy dummy dummy",
+  "dummy dummy bafnw bfcnw N___2 M___2 L___2 K___2 J___2 H___2 G___2 F___2 E___2 D___2 C___2 bfcne bafne dummy dummy",
+  "dummy dummy bafw_ P___3 N___3 M___3 L___3 K___3 J___3 H___3 G___3 F___3 E___3 D___3 C___3 B___3 bafe_ dummy dummy",
+  "dummy bafnw bfcnw P___4 N___4 M___4 L___4 K___4 J___4 H___4 G___4 F___4 E___4 D___4 C___4 B___4 bfcne bafne dummy",
+  "dummy bafw_ R___5 P___5 N___5 M___5 L___5 K___5 J___5 H___5 G___5 F___5 E___5 D___5 C___5 B___5 A___5 bafe_ dummy",
+  "dummy bafw_ R___6 P___6 N___6 M___6 L___6 K___6 J___6 H___6 G___6 F___6 E___6 D___6 C___6 B___6 A___6 bafe_ dummy",
+  "dummy bafw_ R___7 P___7 N___7 M___7 L___7 K___7 J___7 H___7 G___7 F___7 E___7 D___7 C___7 B___7 A___7 bafe_ dummy",
+  "dummy bafw_ R___8 P___8 N___8 M___8 L___8 K___8 J___8 H___8 G___8 F___8 E___8 D___8 C___8 B___8 A___8 bafe_ dummy",
+  "dummy bafw_ R___9 P___9 N___9 M___9 L___9 K___9 J___9 H___9 G___9 F___9 E___9 D___9 C___9 B___9 A___9 bafe_ dummy",
+  "dummy bafw_ R__10 P__10 N__10 M__10 L__10 K__10 J__10 H__10 G__10 F__10 E__10 D__10 C__10 B__10 A__10 bafe_ dummy",
+  "dummy bafw_ R__11 P__11 N__11 M__11 L__11 K__11 J__11 H__11 G__11 F__11 E__11 D__11 C__11 B__11 A__11 bafe_ dummy",
+  "dummy bafsw bfcsw P__12 N__12 M__12 L__12 K__12 J__12 H__12 G__12 F__12 E__12 D__12 C__12 B__12 bfcse bafse dummy",
+  "dummy dummy bafw_ P__13 N__13 M__13 L__13 K__13 J__13 H__13 G__13 F__13 E__13 D__13 C__13 B__13 bafe_ dummy dummy",
+  "dummy dummy bafsw bfcsw N__14 M__14 L__14 K__14 J__14 H__14 G__14 F__14 E__14 D__14 C__14 bfcse bafse dummy dummy",
+  "dummy dummy dummy bafsw bafs_ bfcsw L__15 K__15 J__15 H__15 G__15 F__15 E__15 bfcse bafs_ bafse dummy dummy dummy",
+  "dummy dummy dummy dummy dummy bafsw bafs_ bafs_ bafs_ bafs_ bafs_ bafs_ bafs_ bafse dummy dummy dummy dummy dummy",
+  "dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy dummy"
+].map((row) => row.split(" "));
+
+const BEAVRS_GUIDE_POSITIONS = new Set([
+  "2,5", "2,8", "2,11", "3,3", "3,13", "5,2", "5,5", "5,8", "5,11", "5,14",
+  "8,2", "8,5", "8,8", "8,11", "8,14", "11,2", "11,5", "11,8", "11,11", "11,14",
+  "13,3", "13,13", "14,5", "14,8", "14,11"
+]);
 
 function surface(id, name, type, params, role = "") {
   return { id, name, type, params, role, visible: true };
@@ -214,6 +246,154 @@ export function createArchitectureModel(template) {
   return model;
 }
 
+export function createBeavrsSliceModel() {
+  const model = createEmptyModel("BEAVRS · 2D core slice");
+  const fuelPitch = 1.25984;
+  const assemblyPitch = 21.50364;
+  const coreSize = 19;
+  const coreLower = -coreSize * assemblyPitch / 2;
+  const pinLower = -17 * fuelPitch / 2;
+  const guideCount = BEAVRS_GUIDE_POSITIONS.size;
+  const isAssembly = (position) => /^[A-R]_{2,}\d{1,2}$/.test(position);
+  const coreCells = BEAVRS_CORE_ROWS.flatMap((row, y) => row.map((position, x) => ({
+    x, y, position,
+    universe: isAssembly(position) ? 1 : 3,
+    role: isAssembly(position) ? "assembly" : "water",
+    material: isAssembly(position) ? "fuel" : "water"
+  })));
+  const assemblyCells = Array.from({ length: 17 * 17 }, (_, index) => {
+    const x = index % 17;
+    const y = Math.floor(index / 17);
+    const guide = BEAVRS_GUIDE_POSITIONS.has(`${y},${x}`);
+    return { x, y, universe: guide ? 3 : 2, role: guide ? "water" : "fuel", material: guide ? "water" : "fuel" };
+  });
+
+  model.kind = "beavrs";
+  model.metadata = {
+    source: "MIT Computational Reactor Physics Group · BEAVRS",
+    sourceUrl: "https://github.com/mit-crpg/BEAVRS",
+    sourceVersion: "BEAVRS specification 2.0.2 · public OpenMC generator",
+    status: "benchmark-slice",
+    exportable: true,
+    validation: "not-run-with-openmc",
+    notes: `Editable source-based 2D slice. It keeps the published 19×19 assembly map, 17×17 fuel-pin pitch, and BEAVRS pellet/cladding dimensions. A single representative 17×17 pin-layout template is shared across all 193 map positions; it does not reproduce each BEAVRS assembly loading. The template has 264 fuel pins and 25 water guide/instrument positions, with one 3.1% UO₂ recipe throughout. Axial rod construction, baffle material, per-assembly enrichment, burnable absorbers, control rods, instrumentation variants and boron are omitted. XML generation follows the OpenMC geometry/material input format; this file has not been run through the OpenMC parser.`
+  };
+  model.dimensions = {
+    fuelRadius: 0.39218,
+    gapRadius: 0.40005,
+    cladRadius: 0.45720,
+    pitch: fuelPitch,
+    assemblyPitch,
+    corePitch: assemblyPitch,
+    height: 10
+  };
+  model.view = "xy";
+  model.activeLatticeId = 20;
+  model.surfaces = [
+    surface(10, "Fuel pellet outer radius", "z-cylinder", { x0: 0, y0: 0, r: model.dimensions.fuelRadius }, "fuel"),
+    surface(11, "Cladding inner radius", "z-cylinder", { x0: 0, y0: 0, r: model.dimensions.gapRadius }, "gap"),
+    surface(12, "Cladding outer radius", "z-cylinder", { x0: 0, y0: 0, r: model.dimensions.cladRadius }, "clad"),
+    surface(40, "Core west boundary", "x-plane", { x0: coreLower }, "outer-boundary"),
+    surface(41, "Core east boundary", "x-plane", { x0: -coreLower }, "outer-boundary"),
+    surface(42, "Core south boundary", "y-plane", { y0: coreLower }, "outer-boundary"),
+    surface(43, "Core north boundary", "y-plane", { y0: -coreLower }, "outer-boundary"),
+    surface(44, "2D slice bottom · z = 220 cm", "z-plane", { z0: 220 }, "reflective-boundary"),
+    surface(45, "2D slice top · z = 230 cm", "z-plane", { z0: 230 }, "reflective-boundary")
+  ];
+  model.materials = [
+    {
+      id: 1, name: "UO₂ · 3.1% reference recipe", color: "#e89552", density: 10.30166, densityUnits: "g/cm3", temperature: 566.483,
+      nuclides: [
+        { name: "U234", fraction: 0.0002481768, basis: "ao" },
+        { name: "U235", fraction: 0.0310221, basis: "ao" },
+        { name: "U238", fraction: 0.9687297232, basis: "ao" },
+        { name: "O16", fraction: 2, basis: "ao" }
+      ],
+      note: "3.1% UO₂ recipe and density from the public MIT CRPG BEAVRS OpenMC generator. Other core enrichment zones are not represented."
+    },
+    { id: 2, name: "Helium · BEAVRS", color: "#dfe7e3", density: 0.0015981, densityUnits: "g/cm3", temperature: 566.483, nuclides: [{ name: "He4", fraction: 1, basis: "ao" }], note: "Density from the public BEAVRS material generator." },
+    {
+      id: 3, name: "Zircaloy 4 · BEAVRS", color: "#60c2ca", density: 6.55, densityUnits: "g/cm3", temperature: 566.483,
+      elements: [
+        { name: "O", fraction: 0.00125, basis: "wo" }, { name: "Cr", fraction: 0.001, basis: "wo" },
+        { name: "Fe", fraction: 0.0021, basis: "wo" }, { name: "Zr", fraction: 0.98115, basis: "wo" },
+        { name: "Sn", fraction: 0.0145, basis: "wo" }
+      ],
+      note: "Elemental weight fractions and density from the public BEAVRS material generator."
+    },
+    {
+      id: 4, name: "Light water · boron omitted", color: "#557f9b", density: 0.73986, densityUnits: "g/cm3", temperature: 566.483,
+      nuclides: [{ name: "H1", fraction: 2, basis: "ao" }, { name: "O16", fraction: 1, basis: "ao" }],
+      note: "Water density and temperature match the BEAVRS source constants. The benchmark's 975 ppm boron is intentionally omitted."
+    }
+  ];
+  model.cells = [
+    { id: 1, name: "Core slice", universe: 0, material: null, fill: 20, region: "40 -41 42 -43 44 -45", role: "lattice", surfaceIds: [40, 41, 42, 43, 44, 45] },
+    { id: 2, name: "PWR assembly", universe: 1, material: null, fill: 21, region: "", role: "assembly", surfaceIds: [] },
+    { id: 10, name: "Fuel pellet", universe: 2, material: 1, materialKey: "UO₂ · 3.1%", region: "-10", role: "fuel", surfaceIds: [10] },
+    { id: 11, name: "Helium gap", universe: 2, material: 2, materialKey: "helium", region: "10 -11", role: "gap", surfaceIds: [10, 11] },
+    { id: 12, name: "Zircaloy cladding", universe: 2, material: 3, materialKey: "zircaloy", region: "11 -12", role: "clad", surfaceIds: [11, 12] },
+    { id: 13, name: "Water moderator", universe: 2, material: 4, materialKey: "water", region: "12", role: "water", surfaceIds: [12] },
+    { id: 14, name: "Water region", universe: 3, material: 4, materialKey: "water", region: "", role: "water", surfaceIds: [] }
+  ];
+  model.universes = [
+    { id: 0, name: "Core slice · root", cells: [1] },
+    { id: 1, name: "Shared BEAVRS assembly", cells: [2] },
+    { id: 2, name: "Shared fuel pin", cells: [10, 11, 12, 13] },
+    { id: 3, name: "Water", cells: [14] }
+  ];
+  model.lattices = [
+    {
+      id: 20, name: "BEAVRS core · 19 × 19 map", type: "rectangular", display: "core",
+      dimension: [19, 19], pitch: [assemblyPitch, assemblyPitch], lowerLeft: [coreLower, coreLower], outer: 3,
+      cells: coreCells, universes: coreCells.map((cell) => cell.universe), sharedUniverse: 1, instanceEdit: "shared"
+    },
+    {
+      id: 21, name: "Representative assembly · 17 × 17 pins", type: "rectangular", display: "assembly",
+      dimension: [17, 17], pitch: [fuelPitch, fuelPitch], lowerLeft: [pinLower, pinLower], outer: 3,
+      cells: assemblyCells, universes: assemblyCells.map((cell) => cell.universe), sharedUniverse: 2, instanceEdit: "shared"
+    }
+  ];
+  model.selection = { kind: "lattice", id: 20, surfaceIds: [] };
+  model.focusPath = { assembly: null, pin: null };
+  model.metadata.notes += ` ${coreCells.filter((cell) => cell.role === "assembly").length} assembly positions are present in the source map; ${17 * 17 - guideCount} fuel pins and ${guideCount} water positions are drawn in the selected assembly.`;
+  return model;
+}
+
+export function focusBeavrsModel(model, { level, x, y }) {
+  if (model?.kind !== "beavrs") throw new Error("Open the BEAVRS 2D slice before choosing a geometry path.");
+  if (level === "core") {
+    model.activeLatticeId = 20;
+    model.focusPath = { assembly: null, pin: null };
+    model.activeOccurrence = null;
+    model.selection = { kind: "lattice", id: 20, surfaceIds: [] };
+    return model;
+  }
+  const row = Number(y), column = Number(x);
+  if (!Number.isInteger(row) || !Number.isInteger(column)) throw new Error("Choose integer, zero-based lattice row and column values.");
+  if (level === "assembly") {
+    const position = model.lattices.find((item) => item.display === "core")?.cells.find((item) => item.x === column && item.y === row);
+    if (!position || position.role !== "assembly") throw new Error("That core position does not contain an assembly in the published map.");
+    model.activeLatticeId = 21;
+    model.focusPath = { assembly: { position: position.position, x: column, y: row }, pin: null };
+    model.activeOccurrence = null;
+    model.selection = { kind: "lattice", id: 21, surfaceIds: [] };
+    return model;
+  }
+  if (level === "pin") {
+    if (!model.focusPath?.assembly) throw new Error("Select a core assembly before selecting one of its pins.");
+    const pin = model.lattices.find((item) => item.display === "assembly")?.cells.find((item) => item.x === column && item.y === row);
+    if (!pin) throw new Error("That pin position is outside the 17 × 17 assembly.");
+    model.activeLatticeId = null;
+    model.focusPath.pin = { x: column, y: row, role: pin.role };
+    model.activeOccurrence = { x: column, y: row, universe: pin.universe };
+    model.selection = { kind: "cell", id: pin.role === "fuel" ? 10 : 14, surfaceIds: [] };
+    model.view = "xy";
+    return model;
+  }
+  throw new Error("Choose the core, an assembly, or a pin.");
+}
+
 export function createModelForTemplate(templateId) {
   const item = STARTERS.find((entry) => entry.id === templateId);
   if (!item || item.kind === "reference") return null;
@@ -221,6 +401,7 @@ export function createModelForTemplate(templateId) {
   if (item.modelType === "pwr17") return createLatticeModel({ width: 17, height: 17, name: item.name, pitch: 1.26, fuelCount: 264, kind: "pwr", note: item.note });
   if (item.modelType === "bwr9") return createLatticeModel({ width: 9, height: 9, name: item.name, pitch: 1.6, fuelCount: 72, kind: "bwr", note: item.note });
   if (item.modelType === "hex19") return createHexModel();
+  if (item.modelType === "beavrs-2d") return createBeavrsSliceModel();
   return createArchitectureModel(item);
 }
 
@@ -268,7 +449,8 @@ export function exportGeometryXML(model) {
     if (item.type === "y-plane") coeffs = [item.params.y0 ?? 0];
     if (item.type === "z-plane") coeffs = [item.params.z0 ?? 0];
     if (item.type === "sphere") coeffs = [item.params.x0 ?? 0, item.params.y0 ?? 0, item.params.z0 ?? 0, item.params.r ?? 1];
-    const boundary = item.role === "outer-boundary" ? ' boundary="vacuum"' : "";
+    const boundaryType = item.boundaryType ?? (item.role === "outer-boundary" ? "vacuum" : item.role === "reflective-boundary" ? "reflective" : "");
+    const boundary = boundaryType ? ` boundary="${xmlEscape(boundaryType)}"` : "";
     lines.push(`  <surface id="${Number(item.id)}" name="${xmlEscape(item.name)}" type="${xmlEscape(item.type)}"${boundary} coeffs="${coeffs.map(Number).join(" ")}" />`);
   }
   for (const cell of model.cells) {
@@ -298,9 +480,11 @@ export function exportMaterialsXML(model) {
   if (!model.metadata?.exportable) throw new Error("This model is a schematic or empty starter. Export the GM model JSON to keep editing it.");
   const lines = ['<?xml version="1.0" encoding="utf-8"?>', '<materials>'];
   for (const material of model.materials) {
-    lines.push(`  <material id="${Number(material.id)}" name="${xmlEscape(material.name)}">`);
+    const temperature = Number(material.temperature) > 0 ? ` temperature="${Number(material.temperature)}"` : "";
+    lines.push(`  <material id="${Number(material.id)}" name="${xmlEscape(material.name)}"${temperature}>`);
     if (Number(material.density) > 0) lines.push(`    <density value="${Number(material.density)}" units="${xmlEscape(material.densityUnits || "g/cm3")}" />`);
     for (const nuclide of material.nuclides ?? []) lines.push(`    <nuclide name="${xmlEscape(nuclide.name)}" ${nuclide.basis === "wo" ? "wo" : "ao"}="${Number(nuclide.fraction)}" />`);
+    for (const element of material.elements ?? []) lines.push(`    <element name="${xmlEscape(element.name)}" ${element.basis === "ao" ? "ao" : "wo"}="${Number(element.fraction)}" />`);
     lines.push("  </material>");
   }
   lines.push("</materials>", "");

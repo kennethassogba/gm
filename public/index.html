@@ -4,19 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f3f5f6" />
-    <meta name="description" content="Build and inspect OpenMC geometry in your browser. Model data stays on this device unless you export or send it to a tool." />
+    <meta name="description" content="Build and inspect OpenMC geometry in your browser, including a simplified source-based BEAVRS 2D slice. Model data stays on this device unless you export or send it to a tool." />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="GM — OpenMC Geometry Studio" />
-    <meta property="og:description" content="A browser workspace for OpenMC geometry. Start with a pin, assembly or empty model." />
+    <meta property="og:description" content="A browser workspace for OpenMC geometry. Start with a pin, assembly or simplified BEAVRS 2D slice." />
     <meta property="og:url" content="https://gm.keff.uk/" />
     <meta property="og:image" content="https://gm.keff.uk/social-preview.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:alt" content="Fuel pin cross-section diagram with fuel, gap and cladding layers on the GM Studio geometry workspace card." />
+    <meta property="og:image:alt" content="GM Studio social card with a fuel pin cross-section labeled fuel, gap and cladding, alongside an OpenMC geometry workspace description that includes a simplified BEAVRS 2D slice." />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="GM — OpenMC Geometry Studio" />
-    <meta name="twitter:description" content="Build and inspect OpenMC geometry in your browser." />
+    <meta name="twitter:description" content="Build and inspect OpenMC geometry in your browser, including a simplified source-based BEAVRS 2D slice." />
     <meta name="twitter:image" content="https://gm.keff.uk/social-preview.png" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/site.webmanifest" />
@@ -108,7 +108,7 @@
               </div>
             </div>
             <div class="template-grid" id="template-grid"></div>
-            <div class="library-footnote"><span aria-hidden="true">ⓘ</span><p>Benchmark references are not bundled as validated OpenMC inputs. Generic reactor layouts are illustrative and carry no benchmark status.</p><a href="/docs/benchmarks/">Sources & versions ↗</a></div>
+            <div class="library-footnote"><span aria-hidden="true">ⓘ</span><p>BEAVRS opens as a source-based, simplified 2D slice. Other benchmark cards link to references; generic reactor layouts are illustrative.</p><a href="/docs/benchmarks/">Sources & versions ↗</a></div>
           </section>
 
           <section class="studio-screen" id="studio-screen" hidden aria-label="Geometry editor">
@@ -133,6 +133,7 @@
                     <button role="tab" aria-selected="false" class="view-tab" data-view="xz">XZ</button>
                     <button role="tab" aria-selected="false" class="view-tab" data-view="yz">YZ</button>
                   </div>
+                  <nav id="focus-path" class="focus-path" aria-label="Geometry path" hidden></nav>
               <div class="view-tools"><button class="small-icon-button" id="cutaway-button" aria-pressed="true" aria-label="Toggle cutaway view" title="Toggle cutaway">◐</button><button class="small-icon-button" id="explode-button" aria-pressed="false" aria-label="Toggle exploded view" title="Exploded view">⤢</button><button class="small-icon-button" id="measure-button" aria-pressed="false" aria-label="Toggle measurement mode" title="Measure">↔</button><button class="small-icon-button" id="rotate-button" aria-label="Rotate view one step" title="Rotate view one step">↻</button><button class="small-icon-button" id="fit-button" aria-label="Fit model to view" title="Fit view">⌗</button></div>
                 </div>
                 <div class="canvas-wrap" id="canvas-wrap">
