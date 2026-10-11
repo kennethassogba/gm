@@ -2,31 +2,114 @@
   "openapi": "3.1.0",
   "info": {
     "title": "GM Studio agent API",
-    "version": "0.1.0-preview",
-    "description": "Read the catalog or use the stateless MCP JSON-RPC endpoint. Model documents are not retained. Geometry exports cover the documented starter subset and need validation with the intended OpenMC release."
+    "version": "0.2.0",
+    "description": "Stateless model tools. Supplied documents are not retained."
   },
-  "servers": [{ "url": "https://gm.keff.uk" }],
+  "servers": [
+    {
+      "url": "https://gm.keff.uk"
+    }
+  ],
   "paths": {
     "/api/models.json": {
       "get": {
         "operationId": "listModels",
-        "summary": "List starter models and benchmark source notes",
-        "responses": { "200": { "description": "Catalog and limitations", "content": { "application/json": { "schema": { "type": "object" } } } } }
+        "summary": "List editable examples",
+        "responses": {
+          "200": {
+            "description": "Model catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/mcp": {
       "get": {
         "operationId": "describeMcpServer",
         "summary": "Read the server endpoint description",
-        "responses": { "200": { "description": "Endpoint metadata", "content": { "application/json": { "schema": { "type": "object" } } } } }
+        "responses": {
+          "200": {
+            "description": "Endpoint metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
       },
       "post": {
         "operationId": "callMcp",
         "summary": "Send a stateless MCP JSON-RPC request",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JsonRpcRequest" } } } },
-        "responses": { "200": { "description": "JSON-RPC response", "content": { "application/json": { "schema": { "type": "object" } } } }, "202": { "description": "Notification accepted" }, "400": { "description": "Invalid request" }, "405": { "description": "Method not allowed" } }
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JsonRpcRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON-RPC response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Notification accepted"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "405": {
+            "description": "Method not allowed"
+          }
+        }
       }
     }
   },
-  "components": { "schemas": { "JsonRpcRequest": { "type": "object", "required": ["jsonrpc", "method"], "properties": { "jsonrpc": { "const": "2.0" }, "id": { "type": ["string", "number", "null"] }, "method": { "type": "string" }, "params": { "type": "object" } } } } }
+  "components": {
+    "schemas": {
+      "JsonRpcRequest": {
+        "type": "object",
+        "required": [
+          "jsonrpc",
+          "method"
+        ],
+        "properties": {
+          "jsonrpc": {
+            "const": "2.0"
+          },
+          "id": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ]
+          },
+          "method": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
 }

@@ -1,6 +1,14 @@
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="Agent interfaces for the GM Studio model catalog and geometry starters."><link rel="stylesheet" href="/app.css"><title>Agent guide · GM Studio</title></head>
-<body class="docs-body"><main class="docs-page"><a href="/">← GM Studio</a><p class="eyebrow">AGENT GUIDE</p><h1>Read the catalog or edit a document</h1><p>Agents can discover starters through <a href="/api/models.json">the catalog JSON</a> and inspect tool schemas in <a href="/openapi.json">the OpenAPI document</a>. The MCP endpoint is <code>POST /api/mcp</code>; it accepts JSON-RPC 2.0 over HTTP with protocol version 2025-11-25.</p>
-<h2>Tools</h2><ul><li><code>catalog.list</code> returns starter labels, benchmark sources, versions and simplifications.</li><li><code>geometry.template</code> returns one bundled GM Studio starter document by ID.</li><li><code>geometry.validate</code> checks IDs and references in a supplied GM document.</li><li><code>geometry.export</code> returns supported starter XML for geometry or materials.</li></ul>
-<h2>Browser controls</h2><p>The application exposes <code>window.openmcStudio</code> with catalog, document, dimension, view, validation and export methods. It registers WebMCP tools when the host browser provides <code>navigator.modelContext</code>.</p>
-<h2>Data handling and limits</h2><p>The HTTP tools do not save submitted model documents. Requests have a 500 KB model limit. The endpoint has no authentication because it stores no user state. Do not send private model files unless the agent host and network path are acceptable for that document.</p><p>Validation checks document structure only. It does not run OpenMC. The interface preview does not evaluate arbitrary CSG, load BEAVRS, or implement the planned WebAssembly geometry kernel.</p></main></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/docs/docs.css"><title>Agent API · GM</title></head><body><main><a href="/">← GM</a><h1>Agent API</h1><h2>Current workspace</h2><p>WebMCP tools open examples, read the local model, edit surface coefficients and export files. Changes appear in the editor and enter its undo history.</p><pre>geometry_catalog
+geometry_open { id }
+geometry_get
+geometry_add { type }
+geometry_focus { universe }
+geometry_paint_lattice { id, indices, universe }
+geometry_undo
+geometry_set_surface { id, params }
+geometry_export { file }</pre><h2>HTTP</h2><p>POST JSON-RPC to /api/mcp. Tools process supplied documents for one request without saving them. Browser documents are not available to this endpoint.</p><pre>catalog.list
+geometry.template { id }
+geometry.focus { model, level, x, y }
+geometry.set_surface { model, id, params }
+geometry.validate { model }
+geometry.export { model, file }</pre><p><a href="/api/models.json">Catalog JSON</a> · <a href="/openapi.json">OpenAPI</a></p></main></body></html>

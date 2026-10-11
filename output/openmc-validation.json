@@ -1,0 +1,96 @@
+{
+  "openmc": "0.15.3",
+  "results": [
+    {
+      "model": "htgr",
+      "parsed": true,
+      "points": 80,
+      "mismatches": [],
+      "mismatchCount": 0
+    },
+    {
+      "model": "fast-hex",
+      "parsed": true,
+      "points": 80,
+      "mismatches": [],
+      "mismatchCount": 0
+    },
+    {
+      "model": "candu",
+      "parsed": true,
+      "points": 80,
+      "mismatches": [],
+      "mismatchCount": 0
+    },
+    {
+      "model": "bwr-core",
+      "parsed": true,
+      "points": 80,
+      "mismatches": [],
+      "mismatchCount": 0
+    },
+    {
+      "model": "pwr-core",
+      "parsed": true,
+      "points": 80,
+      "mismatches": [],
+      "mismatchCount": 0
+    },
+    {
+      "model": "takeda",
+      "parsed": true,
+      "points": 80,
+      "mismatches": [],
+      "mismatchCount": 0
+    },
+    {
+      "model": "c5g7-3d",
+      "parsed": true,
+      "points": 80,
+      "mismatches": [],
+      "mismatchCount": 0
+    },
+    {
+      "model": "c5g7-2d",
+      "parsed": true,
+      "points": 80,
+      "mismatches": [],
+      "mismatchCount": 0
+    },
+    {
+      "model": "beavrs",
+      "parsed": true,
+      "points": 80,
+      "mismatches": [],
+      "mismatchCount": 0
+    },
+    {
+      "model": "hex19",
+      "parsed": true,
+      "points": 80,
+      "mismatches": [],
+      "mismatchCount": 0
+    },
+    {
+      "model": "bwr9",
+      "parsed": true,
+      "points": 80,
+      "mismatches": [],
+      "mismatchCount": 0
+    },
+    {
+      "model": "pwr17",
+      "parsed": true,
+      "points": 80,
+      "mismatches": [],
+      "mismatchCount": 0
+    },
+    {
+      "model": "pin",
+      "parsed": true,
+      "points": 80,
+      "mismatches": [],
+      "mismatchCount": 0
+    }
+  ]
+}

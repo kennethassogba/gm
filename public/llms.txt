@@ -1,18 +1,16 @@
-# GM Studio
+# GM
 
-GM Studio is a browser workspace for inspecting and editing a small set of OpenMC-style geometry starters.
+Browser OpenMC geometry editor. Thirteen editable examples, canonical CSG, GPU 3D and XY/XZ/YZ sections. Documents and autosaves stay in the browser. The HTTP endpoint processes only documents explicitly supplied to it.
 
-- Main application: https://gm.keff.uk/
-- Model and import limits: https://gm.keff.uk/docs/
-- Benchmark references: https://gm.keff.uk/docs/benchmarks/
-- Agent guide: https://gm.keff.uk/docs/agents/
-- Catalog JSON: https://gm.keff.uk/api/models.json
+- App: https://gm.keff.uk/
+- Format: https://gm.keff.uk/docs/
+- Example sources: https://gm.keff.uk/docs/benchmarks/
+- Agent API: https://gm.keff.uk/docs/agents/
+- Catalog: https://gm.keff.uk/api/models.json
 - OpenAPI: https://gm.keff.uk/openapi.json
-- MCP endpoint: https://gm.keff.uk/api/mcp
-- MCP server card: https://gm.keff.uk/.well-known/mcp.json
+- MCP: https://gm.keff.uk/api/mcp
 
-This preview uses a Canvas sketch and includes a source-based, simplified BEAVRS 2D slice. The slice keeps the public 19×19 core position map and one representative 17×17 pin-layout template shared across all 193 map entries. It edits selected pin dimensions; assembly-specific loading, enrichment zoning, baffle materials, control rods, burnable absorbers, instrumentation variants and boron are omitted. It does not contain the planned C++/WebAssembly geometry kernel, a GPU CSG renderer, or an OpenMC runtime. C5G7 and Takeda cards remain source references. Generic reactor layouts are schematic.
+WebMCP tools: geometry_catalog, geometry_open, geometry_get, geometry_add, geometry_focus, geometry_paint_lattice, geometry_undo, geometry_set_surface, geometry_export.
+HTTP tools: catalog.list, geometry.template, geometry.focus, geometry.set_surface, geometry.validate, geometry.export.
 
-The stateless MCP endpoint offers catalog.list, geometry.template, geometry.focus, geometry.validate and geometry.export. Geometry validation does not invoke OpenMC; generated XML has not been checked against an installed OpenMC release.
-
-Model edits and browser autosaves stay on the device. Files supplied to the agent endpoint are processed for that request and are not stored by this app.
+Example materials are illustrative. Benchmark adaptations retain source and simplification metadata. GM does not run transport. Complex Boolean 3D meshes are approximations; sections and XML use canonical regions.

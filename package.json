@@ -1,13 +1,21 @@
 {
   "name": "gm-openmc-studio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "A local-first browser workspace for editing OpenMC geometry starters.",
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "node scripts/serve.mjs",
-    "check": "node --check public/app.js && node --check public/model.js && node --check functions/api/mcp.js && node --check src/index.js"
+    "check": "node --check public/app.js && node --check public/model.js && node --check public/csg.js && node --check public/viewer.js && node --check functions/api/mcp.js && node --check src/index.js",
+    "test": "node --test tests/*.test.mjs",
+    "ci": "npm run check && npm test && npm run build"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "esbuild": "0.25.10",
+    "three": "0.180.0"
+  }
 }

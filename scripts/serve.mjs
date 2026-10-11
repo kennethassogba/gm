@@ -3,7 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../dist");
 const types = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".txt": "text/plain; charset=utf-8", ".webmanifest": "application/manifest+json" };
 const server = createServer(async (request, response) => {
   const url = new URL(request.url || "/", "http://localhost");
