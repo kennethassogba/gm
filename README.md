@@ -1,6 +1,6 @@
 # GM Studio
 
-GM Studio is a local-first browser workspace for editing a small starter subset of OpenMC geometry. The source is published in a private GitHub repository and the planned hosting target is Cloudflare Pages at `gm.keff.uk`.
+GM Studio is a local-first browser workspace for editing a small starter subset of OpenMC geometry. The source is published in a private GitHub repository and the Cloudflare Worker is configured for `gm.keff.uk`.
 
 ## Run locally
 
@@ -11,7 +11,7 @@ npm run build
 npm run dev
 ```
 
-Open `http://localhost:4173`. The static preview server does not run the Pages MCP Function. Use Cloudflare Pages preview or Wrangler to exercise `/api/mcp`.
+Open `http://localhost:4173`. The static preview server does not run the MCP endpoint. Use `npx wrangler dev` to exercise the Worker and `/api/mcp` locally.
 
 ## What is in this preview
 
@@ -35,10 +35,8 @@ Benchmark cards identify source and version where available, explain what is abs
 
 The endpoint processes supplied model JSON for one request and does not persist it. Avoid sending model files to an agent host unless its data path is appropriate for them.
 
-## Cloudflare Pages
+## Cloudflare Workers
 
-Build command: `npm run build`  
-Output directory: `dist`  
-Pages Functions source: `functions/`
+Workers Builds uses `npm run build` followed by `npx wrangler deploy` from the repository root. `wrangler.toml` points the Worker entrypoint at `src/index.js` and serves the generated `dist/` assets. The Worker sends `/api/*` through its handler first; `/api/mcp` is implemented in `functions/api/mcp.js` and other API assets are served from `dist/`.
 
-`wrangler.toml` sets the Pages output directory. Git integration should connect the private `main` branch and the custom domain should be added in the Pages project settings.
+Connect the private `main` branch with Workers Builds, then add `gm.keff.uk` under the Worker's custom domains.
