@@ -467,7 +467,7 @@ function drawPinXY(ctx, width, height, dpr, dimensions) {
   else if (role === "clad") drawSurfaceRing(ctx, cx, cy, outer + 4, "#fff1db", true);
   else if (role === "gap") drawSurfaceRing(ctx, cx, cy, (fuel + gap) / 2, "#ffffff", true);
   drawAxes(ctx, cx, cy, span);
-  ctx.fillStyle = "#d4e1e4"; ctx.font = "11px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "center";
+  ctx.fillStyle = "#d4e1e4"; ctx.font = "12px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "center";
   ctx.fillText(`r ${Number(dimensions.cladRadius || .475).toFixed(3)} cm`, cx, cy + outer + 26);
   ctx.fillStyle = "#93aab2"; ctx.fillText("XY · pin cross-section", cx, 27);
 }
@@ -477,7 +477,7 @@ function drawAxes(ctx, cx, cy, size) {
   ctx.lineWidth = 1;
   ctx.strokeStyle = "#78a9b0"; ctx.beginPath(); ctx.moveTo(cx - a, cy); ctx.lineTo(cx + a, cy); ctx.stroke();
   ctx.strokeStyle = "#ba9473"; ctx.beginPath(); ctx.moveTo(cx, cy - a); ctx.lineTo(cx, cy + a); ctx.stroke();
-  ctx.font = "11px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "left";
+  ctx.font = "12px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "left";
   ctx.fillStyle = "#9bcbd0"; ctx.fillText("x", cx + a + 5, cy + 3); ctx.fillStyle = "#d7ad89"; ctx.fillText("y", cx + 4, cy - a - 5);
 }
 
@@ -504,7 +504,7 @@ function drawPinSide(ctx, width, height, dimensions, axis) {
   const role = activeRole();
   const radius = role === "fuel" ? fuel : role === "gap" ? gap : clad;
   if (role) { ctx.strokeStyle = "#fff0dc"; ctx.lineWidth = 1.5; ctx.strokeRect(cx - radius - 2, y0 - 2, radius * 2 + 4, axialHeight + 4); }
-  ctx.fillStyle = "#d4e1e4"; ctx.font = "11px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "center";
+  ctx.fillStyle = "#d4e1e4"; ctx.font = "12px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "center";
   ctx.fillText(`${axis.toUpperCase()}Z · axial section`, cx, 26);
   ctx.fillStyle = "#9bb1b8"; ctx.fillText(`${Number(dimensions.height || 30).toFixed(1)} cm`, cx + span / 2 + 25, cy + 3);
   ctx.fillText("fuel", cx, cy + 4);
@@ -555,7 +555,7 @@ function drawPin3D(ctx, width, height, dimensions) {
     const index = role === "fuel" ? 2 : role === "clad" ? 0 : 1;
     ctx.beginPath(); ctx.ellipse(cx, topY, radii[index] + 4, ry * (radii[index] / radii[0]) + 3, 0, 0, Math.PI * 2); ctx.strokeStyle = "#fff0d7"; ctx.lineWidth = 2; ctx.stroke();
   }
-  ctx.fillStyle = "#d7e4e7"; ctx.font = "11px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "left";
+  ctx.fillStyle = "#d7e4e7"; ctx.font = "12px ui-monospace, SFMono-Regular, monospace"; ctx.textAlign = "left";
   ctx.fillText(`OD ${Number(dimensions.cladRadius || .475).toFixed(3)} cm`, cx + radii[0] + 21, topY + bodyH * .53);
   ctx.fillStyle = "#8fa8af"; ctx.fillText("DRAG TO ORBIT · SCROLL TO ZOOM", 18, height - 38);
   ctx.strokeStyle = "#7fb6bc"; ctx.beginPath(); ctx.moveTo(cx - radii[0], topY - 26); ctx.lineTo(cx + radii[0], topY - 26); ctx.moveTo(cx - radii[0], topY - 31); ctx.lineTo(cx - radii[0], topY - 21); ctx.moveTo(cx + radii[0], topY - 31); ctx.lineTo(cx + radii[0], topY - 21); ctx.stroke();
@@ -609,10 +609,10 @@ function drawLattice(ctx, width, height, lattice) {
     }
   }
   if (lattice.display === "core" && state.model.view !== "3d") {
-    ctx.textAlign = "center"; ctx.font = "11px ui-monospace, SFMono-Regular, monospace"; ctx.fillStyle = "#cad9dc";
+    ctx.textAlign = "center"; ctx.font = "12px ui-monospace, SFMono-Regular, monospace"; ctx.fillStyle = "#cad9dc";
     ctx.fillText("CORE POSITION MAP · 193 ASSEMBLIES", cx, 28);
   } else if (state.model.view === "3d") {
-    ctx.textAlign = "center"; ctx.font = "11px ui-monospace, SFMono-Regular, monospace"; ctx.fillStyle = "#cad9dc";
+    ctx.textAlign = "center"; ctx.font = "12px ui-monospace, SFMono-Regular, monospace"; ctx.fillStyle = "#cad9dc";
     ctx.fillText(lattice.name, cx, 28); ctx.fillStyle = "#94aab1"; ctx.fillText("REPEATED UNIVERSE · CLICK A POSITION", cx, height - 20);
   }
 }
