@@ -1,1 +1,17 @@
-{"detector":{"ignoreRules":[],"ignoreFiles":[],"ignoreValues":[]}}
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "public/index.html"
+        ],
+        "createdAt": "2026-10-11T23:18:06.554Z",
+        "reason": "Agent review: the only finding is the compact iOS-style segmented view control requested by the user. Labels have 12px horizontal button padding, 3px vertical button padding, a 28px minimum height, and 2px wrapper padding. The wrapper is a control track, not a text content panel."
+      }
+    ]
+  }
+}
