@@ -29,7 +29,10 @@ export class GeometryViewer {
   for(const axis of ['xy','xz','yz']){const c=host.querySelector('#view-'+axis);c.addEventListener('click',e=>this.pickSlice(e,axis,false));c.addEventListener('dblclick',e=>this.pickSlice(e,axis,true));}
  }
  update(model,options={}){
-  this.model=model;this.compiled=compileModel(model);this.revision++;this.items=collectInstances(this.compiled);this.rebuild();if(options.fit||this.lastFocus!==JSON.stringify(model.focus)){this.fit();this.lastFocus=JSON.stringify(model.focus);}this.resize();
+  this.model=model;this.compiled=compileModel(model);this.revision++;this.items=collectInstances(this.compiled);
+  this.onlyBackground=this.items.every(item=>item.shape.type==='moderator'||(!item.cell.region&&item.shape.type==='box'));
+  const s=model.selection;this.selectedCells=new Set(model.cells.filter(c=>s?.kind==='cell'?c.id===s.id:s?.kind==='material'?c.material===s.id:s?.kind==='surface'?(c.region.match(/[+-]?\d+/g)||[]).some(t=>Math.abs(Number(t))===s.id):false).map(c=>c.id));
+  this.rebuild();if(options.fit||this.lastFocus!==JSON.stringify(model.focus)){this.fit();this.lastFocus=JSON.stringify(model.focus);}this.resize();
   this.canvas.dataset.revision=this.revision;this.canvas.dataset.instances=this.items.length;
  }
  clear(){
@@ -40,8 +43,8 @@ export class GeometryViewer {
   this.clear();const batches=new Map();const m=this.model;
   for(const item of this.items){
    if(item.cell.hidden||(m.isolated!=null&&item.cell.id!==m.isolated))continue;
-   const sh=item.shape,b=item.bounds,mat=m.materials.find(x=>x.id===item.cell.material),background=sh.type==='moderator'||(!item.cell.region&&sh.type==='box');
-   if(background&&!m.showModerator)continue;
+   const sh=item.shape,b=item.bounds,mat=m.materials.find(x=>x.id===item.cell.material),background=!this.onlyBackground&&(sh.type==='moderator'||(!item.cell.region&&sh.type==='box'));
+   if(background&&!m.showModerator&&!this.selectedCells.has(item.cell.id))continue;
    const color=m.colorBy==='universe'?new THREE.Color().setHSL((item.universe*.137)%1,.3,.57).getStyle():mat?.color||'#9b9da2';
    const key=JSON.stringify([item.cell.id,sh,b,color,m.cutaway,background]);
    if(!batches.has(key))batches.set(key,{items:[],item,color,background});batches.get(key).items.push(item);
@@ -65,7 +68,7 @@ export class GeometryViewer {
  }
  addBatch(geometry,material,items,center){
   const mesh=new THREE.InstancedMesh(geometry,material,items.length),matrix=new THREE.Matrix4();
-  items.forEach((item,i)=>{const explode=this.model.exploded&&this.items.length<1000?item.cell.id*.12:0;matrix.makeTranslation(item.position[0]+center[0]+explode,item.position[1]+center[1],item.position[2]+center[2]);mesh.setMatrixAt(i,matrix);if(this.model.selection?.kind==='cell'&&this.model.selection.id===item.cell.id)mesh.setColorAt(i,new THREE.Color(material.color).lerp(new THREE.Color('#ffffff'),.22));});
+  items.forEach((item,i)=>{const explode=this.model.exploded&&this.items.length<1000?item.cell.id*.12:0;matrix.makeTranslation(item.position[0]+center[0]+explode,item.position[1]+center[1],item.position[2]+center[2]);mesh.setMatrixAt(i,matrix);if(this.selectedCells.has(item.cell.id))mesh.setColorAt(i,new THREE.Color(material.color).lerp(new THREE.Color('#ffffff'),.22));});
   mesh.instanceMatrix.needsUpdate=true;mesh.userData.items=items;this.group.add(mesh);this.meshes.push(mesh);
  }
  resize(){
@@ -99,7 +102,7 @@ export class GeometryViewer {
    for(let y=0;y<height;y++)for(let x=0;x<width;x++){
     const p=[0,0,0];p[a]=cx+(x-width/2)*scale;p[c]=cy+(height/2-y)*scale;p[normal]=cut;
     const found=locate(this.compiled,p),cell=found?.cell;let hex=0x17191e;
-    if(cell&&!cell.hidden&&(this.model.isolated==null||cell.id===this.model.isolated)){hex=this.model.colorBy==='universe'?new THREE.Color().setHSL((found.universe*.137)%1,.3,.57).getHex():colors.get(cell.material)||0x91939b;if(this.model.selection?.id===cell.id&&this.model.selection.kind==='cell')hex=new THREE.Color(hex).lerp(new THREE.Color('#ffffff'),.14).getHex();}
+    if(cell&&!cell.hidden&&(this.model.isolated==null||cell.id===this.model.isolated)){hex=this.model.colorBy==='universe'?new THREE.Color().setHSL((found.universe*.137)%1,.3,.57).getHex():colors.get(cell.material)||0x91939b;if(this.selectedCells.has(cell.id))hex=new THREE.Color(hex).lerp(new THREE.Color('#ffffff'),.14).getHex();}
     const i=(y*width+x)*4;image.data[i]=hex>>16&255;image.data[i+1]=hex>>8&255;image.data[i+2]=hex&255;image.data[i+3]=255;
    }ctx.putImageData(image,0,0);canvas.dataset.revision=this.revision;
   }

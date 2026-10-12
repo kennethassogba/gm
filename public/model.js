@@ -1,8 +1,8 @@
 import {CORE_ROWS, GUIDE_POSITIONS} from './source-map.js';
 export const BENCHMARKS=[
 {id:'beavrs',name:'BEAVRS',source:'MIT CRPG',version:'2.0.2',href:'https://github.com/mit-crpg/BEAVRS',simplification:'Published map and pin dimensions. One representative assembly and fuel recipe. Axial loading and control rods omitted.'},
-{id:'c5g7-2d',name:'C5G7 · 2D',source:'OECD NEA / MIT CRPG',version:'NEA/NSC/DOC(2003)16',href:'https://github.com/mit-crpg/benchmarks/tree/master/c5g7/openmc',simplification:'3 × 3 core and 17 × 17 pin layouts. Illustrative continuous-energy recipes replace the seven-group benchmark materials.'},
-{id:'c5g7-3d',name:'C5G7 · 3D',source:'OECD NEA / MIT CRPG',version:'NEA/NSC/DOC(2005)16',href:'https://github.com/mit-crpg/benchmarks/tree/master/c5g7/openmc',simplification:'Unrodded layout with a top reflector. Illustrative continuous-energy recipes. Axial pin details omitted.'},
+{id:'c5g7-2d',name:'C5G7 - 2D',source:'OECD NEA / MIT CRPG',version:'NEA/NSC/DOC(2003)16',href:'https://github.com/mit-crpg/benchmarks/tree/master/c5g7/openmc',simplification:'3 × 3 core and 17 × 17 pin layouts. Illustrative continuous-energy recipes replace the seven-group benchmark materials.'},
+{id:'c5g7-3d',name:'C5G7 - 3D',source:'OECD NEA / MIT CRPG',version:'NEA/NSC/DOC(2005)16',href:'https://github.com/mit-crpg/benchmarks/tree/master/c5g7/openmc',simplification:'Unrodded layout with a top reflector. Illustrative continuous-energy recipes. Axial pin details omitted.'},
 {id:'takeda',name:'Takeda',source:'OECD NEA',version:'NEA/NSC/DOC(2000)4',href:'https://www.oecd-nea.org/jcms/pl_17440/3-d-radiation-transport-benchmarks-for-simple-geometries-with-void-region',simplification:'Box-core, reflector and void-channel adaptation. Illustrative dimensions and recipes; not an exact reference variant.'}
 ].map(x=>({...x,family:'benchmarks'}));
 export const STARTERS=[
@@ -20,12 +20,12 @@ m.materials=data.map(([name,color,density,ns],i)=>({id:i+1,name,color,density,de
 function surf(m,name,type,params,boundaryType){const id=nextId(m.surfaces);m.surfaces.push({id,name,type,params,...(boundaryType?{boundaryType}:{})});return id;}
 function cell(m,universe,name,region,material,fill=null){const id=nextId(m.cells);m.cells.push({id,universe,name,region,material,fill});return id;}
 function uni(m,name,bounds){const id=Math.max(nextId(m.universes),nextId(m.lattices));m.universes.push({id,name,bounds});return id;}
-function box(m,name,b,boundary){return b.map((v,i)=>{const a='xyz'[Math.floor(i/2)],id=surf(m,name+' '+a+(i%2?'+':'−'),a+'-plane',{[a+'0']:v},boundary);return(i%2?'-':'')+id;}).join(' ');}
+function box(m,name,b,boundary){return b.map((v,i)=>{const a='xyz'[Math.floor(i/2)],id=surf(m,name+' '+a+(i%2?'+':'-'),a+'-plane',{[a+'0']:v},boundary);return(i%2?'-':'')+id;}).join(' ');}
 function water(m,name='Moderator',mat=4,b=[-1,1,-1,1,-15,15]){const u=uni(m,name,b);cell(m,u,name,'',mat);return u;}
 function pin(m,name='Fuel pin',r=.41,p=1.26,h=30,fuel=1,coolant=4,single=false){
-const u=uni(m,name,[-p/2,p/2,-p/2,p/2,-h/2,h/2]),f=surf(m,name+' · fuel','z-cylinder',{x0:0,y0:0,r});cell(m,u,'Fuel','-'+f,fuel);
+const u=uni(m,name,[-p/2,p/2,-p/2,p/2,-h/2,h/2]),f=surf(m,name+' - fuel','z-cylinder',{x0:0,y0:0,r});cell(m,u,'Fuel','-'+f,fuel);
 if(single){cell(m,u,'Moderator',''+f,coolant);return u;}
-const g=surf(m,name+' · gap','z-cylinder',{x0:0,y0:0,r:r+.008}),c=surf(m,name+' · clad','z-cylinder',{x0:0,y0:0,r:r+.065});cell(m,u,'Gap',f+' -'+g,2);cell(m,u,'Cladding',g+' -'+c,3);cell(m,u,'Moderator',''+c,coolant);return u;
+const g=surf(m,name+' - gap','z-cylinder',{x0:0,y0:0,r:r+.008}),c=surf(m,name+' - clad','z-cylinder',{x0:0,y0:0,r:r+.065});cell(m,u,'Gap',f+' -'+g,2);cell(m,u,'Cladding',g+' -'+c,3);cell(m,u,'Moderator',''+c,coolant);return u;
 }
 export function hexPositions(rings){const a=[];for(let q=1-rings;q<rings;q++)for(let r=1-rings;r<rings;r++)if(Math.max(Math.abs(q),Math.abs(r),Math.abs(q+r))<rings)a.push({q,r});return a;}
 export function latticePosition(l,e){
@@ -76,7 +76,7 @@ const id=cell(m,u,type[0].toUpperCase()+type.slice(1)+' '+n,region,1);m.kind='ge
 export function cloneOccurrence(m,path,cellId){
 const cm=new Map(),sm=new Map(),um=new Map(),lm=new Map();
 function copy(id,depth){
-const old=m.universes.find(x=>x.id===id),u=uni(m,old.name+' · occurrence',structuredClone(old.bounds));um.set(id,u);
+const old=m.universes.find(x=>x.id===id),u=uni(m,old.name+' - occurrence',structuredClone(old.bounds));um.set(id,u);
 for(const c of [...m.cells.filter(x=>x.universe===id)]){
 const n=structuredClone(c);n.id=nextId(m.cells);n.universe=u;cm.set(c.id,n.id);
 n.region=String(c.region).replace(/[+-]?\d+/g,t=>{const old=Math.abs(Number(t));if(!sm.has(old)){const s=structuredClone(m.surfaces.find(x=>x.id===old));s.id=nextId(m.surfaces);m.surfaces.push(s);sm.set(old,s.id);}return(t.startsWith('-')?'-':'')+sm.get(old);});

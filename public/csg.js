@@ -2,7 +2,7 @@ import {latticePosition} from './model.js';
 export function parseRegion(text) {
  if(/[^\s\d+\-():~|]/.test(String(text||'')))throw new Error('Use surface IDs and region operators.');
  const tokens=String(text||'').replaceAll('|',':').match(/[+-]?\d+|[():~]/g)||[];let i=0;
- function atom(){let t=tokens[i++];if(t==='~')return{op:'not',a:atom()};if(t==='('){let a=union();if(tokens[i++]!==')')throw new Error('Close the region parenthesis.');return a;}if(!/^[+-]?\d+$/.test(t||''))throw new Error('Enter surface half-spaces, e.g. −1 2.');return{op:'surface',id:Math.abs(Number(t)),negative:Number(t)<0};}
+ function atom(){let t=tokens[i++];if(t==='~')return{op:'not',a:atom()};if(t==='('){let a=union();if(tokens[i++]!==')')throw new Error('Close the region parenthesis.');return a;}if(!/^[+-]?\d+$/.test(t||''))throw new Error('Enter surface half-spaces, e.g. -1 2.');return{op:'surface',id:Math.abs(Number(t)),negative:Number(t)<0};}
  function intersection(){let a=atom();while(i<tokens.length&&![')',':'].includes(tokens[i]))a={op:'and',a,b:atom()};return a;}
  function union(){let a=intersection();while(tokens[i]===':'){i++;a={op:'or',a,b:intersection()};}return a;}
  if(!tokens.length)return null;const result=union();if(i!==tokens.length)throw new Error('Check the region expression.');return result;
