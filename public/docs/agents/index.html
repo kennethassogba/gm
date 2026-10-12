@@ -1,4 +1,5 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/docs/docs.css"><title>Agent API - GM</title></head><body><main><a href="/">← GM</a><h1>Agent API</h1><h2>Current workspace</h2><p>WebMCP tools open examples, read the local model, edit surface coefficients and export files. Changes appear in the editor and enter its undo history.</p><pre>geometry_catalog
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/docs/docs.css"><title>Agent API - GM</title></head><body><main><a href="/">← GM</a><h1>Agent API</h1><h2>Current workspace</h2><p>WebMCP tools open examples, read the local model, edit surface coefficients and export files. Changes appear in the editor and enter its undo history.</p><pre>geometry_construct { operation, spec }
+geometry_catalog
 geometry_open { id }
 geometry_get
 geometry_add { type }
@@ -6,9 +7,11 @@ geometry_focus { universe }
 geometry_paint_lattice { id, indices, universe }
 geometry_undo
 geometry_set_surface { id, params }
-geometry_export { file }</pre><h2>HTTP</h2><p>POST JSON-RPC to /api/mcp. Tools process supplied documents for one request without saving them. Browser documents are not available to this endpoint.</p><pre>catalog.list
+geometry_export { file }</pre><h2>HTTP</h2><p>POST JSON-RPC to /api/mcp. Tools process supplied documents for one request without saving them. Browser documents are not available to this endpoint.</p><pre>geometry.empty { name }
+geometry.construct { model, operation, spec }
+catalog.list
 geometry.template { id }
 geometry.focus { model, level, x, y }
 geometry.set_surface { model, id, params }
 geometry.validate { model }
-geometry.export { model, file }</pre><p><a href="/api/models.json">Catalog JSON</a> - <a href="/openapi.json">OpenAPI</a></p></main></body></html>
+geometry.export { model, file }</pre><p><a href="/docs/construction.md">Construction operations</a></p><p><a href="/api/models.json">Catalog JSON</a> - <a href="/openapi.json">OpenAPI</a></p></main></body></html>

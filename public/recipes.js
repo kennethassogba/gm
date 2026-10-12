@@ -1,4 +1,4 @@
-import {createPin,createUniform,createLattice,createCell,combineCells,placeUniverse,focusUniverse,enableDomain,syncDomains} from './builder.js';
+import {createPin,createUniform,createLattice,createCell,combineCells,placeUniverse,focusUniverse,enableDomain,syncDomains,rotateCells} from './builder.js';
 
 const layer=(name,radius,material)=>({name,radius,material});
 const pin=(key,name,r=.41,p=1.26,h=30,fuel=1,coolant=4,single=false)=>({key,title:name,type:'pin',spec:{name,pitch:p,height:h,coolant,layers:single?[layer('Fuel',r,fuel)]:[layer('Fuel',r,fuel),layer('Gap',r+.008,2),layer('Cladding',r+.065,3)]}});
@@ -8,7 +8,17 @@ const hex=(key,name,rings,p,fill,outer,h=30)=>({key,title:name,type:'lattice',sp
 const finish=fill=>({key:'root',title:'Set model boundary',type:'place',spec:{fill:'@'+fill,target:0,boundary:'vacuum'}});
 const assembly=(kind='pwr',h=30)=>[pin('pin',kind==='pwr'?'PWR pin':'BWR pin',.41,kind==='pwr'?1.26:1.6,h),uniform('water',kind==='pwr'?'Guide tube':'Water channel',4),rect('assembly',kind==='pwr'?'PWR assembly':'BWR assembly',kind==='pwr'?17:9,kind==='pwr'?1.26:1.6,'pin','water',h,kind==='pwr'?'pwr-guides':'bwr-channel')];
 
+const solid=(key,title,type,spec)=>({key,title,type,spec:{type,name:title,universe:0,...spec},environment:true});
+const cut=(key,a,b,title)=>({key,title,type:'boolean',spec:{a:'@'+a,b:'@'+b,operation:'difference'},environment:true});
 export function getRecipe(id){
+ if(id==='drilled-block')return [solid('block','Create a box','box',{name:'Block',size:[10,8,4],material:10}),solid('hole','Add a cylinder','cylinder',{name:'Cutter',radius:2,height:6,material:null}),cut('block','block','hole','Subtract the cylinder')];
+ if(id==='joined-pipes')return [solid('pipe','Horizontal cylinder','cylinder',{radius:2,height:10,axis:'x',material:8}),solid('branch','Branch cylinder','cylinder',{radius:2,height:8,axis:'y',position:[1,3,0],material:8}),{key:'pipe',title:'Join the cylinders',type:'boolean',environment:true,spec:{a:'@pipe',b:'@branch',operation:'union',name:'Pipe junction',material:8}},solid('bore','Horizontal bore','cylinder',{radius:1.4,height:12,axis:'x',material:null}),solid('cross','Branch bore','cylinder',{radius:1.4,height:10,axis:'y',position:[1,3,0],material:null}),{key:'bore',title:'Join the bores',type:'boolean',environment:true,spec:{a:'@bore',b:'@cross',operation:'union',name:'Bore',material:null}},cut('pipe','pipe','bore','Hollow the junction')];
+ if(id==='spherical-shell')return [solid('shell','Spherical shell','shell',{radius:5,innerRadius:4.2,material:8})];
+ if(id==='slab-shield')return [solid('lead','Lead slab','box',{size:[2,12,12],position:[-3,0,0],material:11}),solid('poly','Polyethylene slab','box',{size:[4,12,12],material:12}),solid('steel','Steel slab','box',{size:[2,12,12],position:[3,0,0],material:8})];
+ if(id==='shield-duct')return [solid('wall','Concrete wall','box',{size:[24,8,18],material:14}),solid('duct','Duct','cylinder',{radius:2,height:16,axis:'y',material:null}),{key:'duct',title:'Rotate the duct',type:'rotate',environment:true,spec:{ids:['@duct'],angles:[0,0,25],pivot:[0,0,0]}},cut('wall','wall','duct','Cut the duct')];
+ if(id==='collimator')return [solid('block','Tungsten block','box',{size:[12,10,6],material:16}),...[-3,0,3].flatMap((x,i)=>[solid('hole'+i,'Bore '+(i+1),'cylinder',{radius:.85,height:8,position:[x,0,0],material:null}),cut('block','block','hole'+i,'Cut bore '+(i+1))])];
+ if(id==='detector')return [solid('housing','Aluminium housing','cylinder',{radius:3,height:7,material:10}),solid('cavity','Cavity','cylinder',{radius:2.7,height:6.4,material:null}),cut('housing','housing','cavity','Hollow the housing'),solid('crystal','Germanium crystal','cylinder',{radius:2.4,height:5.6,material:15})];
+ if(id==='nested-spheres')return [solid('sphere','Fuel sphere','sphere',{radius:4,material:1}),solid('reflector','Reflector shell','shell',{radius:7,innerRadius:4,material:5})];
  if(id==='pin')return [pin('pin','Fuel pin'),finish('pin')];
  if(id==='pwr17'||id==='bwr9')return [...assembly(id==='pwr17'?'pwr':'bwr'),finish('assembly')];
  if(id==='hex19')return [pin('pin','Fuel pin'),uniform('water','Moderator',4),hex('lattice','Hexagonal lattice',3,1.26,'pin','water'),finish('lattice')];
@@ -39,7 +49,9 @@ export function resolveSpec(spec,refs){
 }
 export function applyRecipeStep(m,step,spec){
  let result;
- if(step.type==='pin')result=createPin(m,spec);
+ if(step.environment)enableDomain(m,0,null);
+ if(step.type==='rotate')result=rotateCells(m,spec.ids,spec.angles,spec.pivot);
+ else if(step.type==='pin')result=createPin(m,spec);
  else if(step.type==='universe')result=createUniform(m,spec);
  else if(step.type==='lattice')result=createLattice(m,spec);
  else if(step.type==='boolean')result=combineCells(m,spec);
@@ -50,5 +62,6 @@ export function applyRecipeStep(m,step,spec){
   const u=m.universes.find(u=>u.id===0);enableDomain(m,0,spec.material??null,spec.boundary||'vacuum');u.bounds=[...spec.bounds];u.domain.auto=spec.auto??false;u.domain.boundary=spec.boundary||'vacuum';syncDomains(m);focusUniverse(m,0);
  }else result=createCell(m,step.type==='box'?{...spec,type:'box'}:spec);
  if(['pin','universe','lattice'].includes(step.type))focusUniverse(m,result);
+ if(step.environment)syncDomains(m);
  return result;
 }

@@ -7,7 +7,7 @@ export function pythonModel(model){
  const m=activeGeometry(model),lines=['# '+String(m.name).replace(/[\r\n]/g,' '),'import openmc','','# Materials'];
  for(const mat of m.materials){const n='m'+mat.id;lines.push(n+' = openmc.Material(material_id='+mat.id+', name='+literal(mat.name)+')',n+'.set_density('+literal(mat.densityUnits||'g/cm3')+', '+mat.density+')');for(const x of mat.nuclides||[])lines.push(n+'.add_nuclide('+literal(x.name)+', '+x.fraction+', '+literal(x.basis||'ao')+')');for(const x of mat.elements||[])lines.push(n+'.add_element('+literal(x.name)+', '+x.fraction+', '+literal(x.basis||'ao')+')');}
  lines.push('materials = openmc.Materials(['+m.materials.map(x=>'m'+x.id).join(', ')+'])','','# Surfaces');
- const classes={'x-plane':'XPlane','y-plane':'YPlane','z-plane':'ZPlane',plane:'Plane',sphere:'Sphere','x-cylinder':'XCylinder','y-cylinder':'YCylinder','z-cylinder':'ZCylinder'};
+ const classes={'x-plane':'XPlane','y-plane':'YPlane','z-plane':'ZPlane',quadric:'Quadric',plane:'Plane',sphere:'Sphere','x-cylinder':'XCylinder','y-cylinder':'YCylinder','z-cylinder':'ZCylinder'};
  for(const s of m.surfaces)lines.push('s'+s.id+' = openmc.'+classes[s.type]+'(surface_id='+s.id+', name='+literal(s.name)+', '+Object.entries(s.params).map(([k,v])=>k+'='+v).join(', ')+(s.boundaryType?', boundary_type='+literal(s.boundaryType):'')+')');
  lines.push('','# Reusable universes');for(const u of m.universes)lines.push('u'+u.id+' = openmc.Universe(universe_id='+u.id+', name='+literal(u.name)+')');
  lines.push('','# Lattices');

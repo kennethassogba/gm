@@ -1,6 +1,6 @@
 # GM
 
-Browser OpenMC geometry editor. Thirteen editable examples, canonical CSG, GPU 3D and XY/XZ/YZ sections. Documents and autosaves stay in the browser. The HTTP endpoint processes only documents explicitly supplied to it.
+Browser OpenMC geometry editor. Twenty-one editable examples across CSG, transport geometry and reactors, canonical CSG, GPU 3D and XY/XZ/YZ sections. Documents and autosaves stay in the browser. The HTTP endpoint processes only documents explicitly supplied to it.
 
 - App: https://gm.keff.uk/
 - Format: https://gm.keff.uk/docs/
@@ -10,7 +10,7 @@ Browser OpenMC geometry editor. Thirteen editable examples, canonical CSG, GPU 3
 - OpenAPI: https://gm.keff.uk/openapi.json
 - MCP: https://gm.keff.uk/api/mcp
 
-WebMCP tools: geometry_catalog, geometry_open, geometry_get, geometry_add, geometry_focus, geometry_paint_lattice, geometry_undo, geometry_set_surface, geometry_export.
-HTTP tools: catalog.list, geometry.template, geometry.focus, geometry.set_surface, geometry.validate, geometry.export.
+WebMCP tools: geometry_construct, geometry_catalog, geometry_open, geometry_get, geometry_add, geometry_focus, geometry_paint_lattice, geometry_undo, geometry_set_surface, geometry_export.
+HTTP tools: geometry.empty, geometry.construct, catalog.list, geometry.template, geometry.focus, geometry.set_surface, geometry.validate, geometry.export.
 
 Example materials are illustrative. Benchmark adaptations retain source and simplification metadata. GM does not run transport. Complex Boolean 3D meshes are approximations; sections and XML use canonical regions.

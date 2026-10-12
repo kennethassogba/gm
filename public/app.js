@@ -1,10 +1,11 @@
+import {generalArt} from './example-art.js';
 import {STARTERS,createEmptyModel,createModelForTemplate,addPrimitive,addComponent,translateCell,updateLatticePitch,nextId,cloneOccurrence,exportGeometryXML,exportMaterialsXML,exportPython,importGeometryXML,validateModel} from './model.js';
 import {parseRegion} from './csg.js';
 import {GeometryViewer} from './viewer.js';
 import {installConstruction} from './construction-ui.js';
 import {syncDomains,canContain,constructGeometry} from './builder.js';
 const $=id=>document.getElementById(id),plainLabel=v=>String(v??'').replaceAll('\u00b7','-'),esc=v=>plainLabel(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
-const state={model:null,page:'library',filter:'all',undo:[],redo:[],transaction:null,scope:'shared',occurrence:null,paint:null,selectedSurfaces:[],documents:[],viewer:null,renderPending:false,measure:null};
+const state={model:null,page:'library',filter:'general',undo:[],redo:[],transaction:null,scope:'shared',occurrence:null,paint:null,selectedSurfaces:[],documents:[],viewer:null,renderPending:false,measure:null};
 const STORAGE='gm.documents.v2';
 try{state.documents=JSON.parse(localStorage.getItem(STORAGE)||'[]');const old=localStorage.getItem('gm.studio.model.v1');if(!state.documents.length&&old)state.documents.push(JSON.parse(old));}catch{notice('Local storage unavailable. Export a copy before closing.');}
 function notice(text){$('notice').querySelector('span').textContent=text;$('notice').classList.add('visible');}
@@ -34,6 +35,7 @@ function openModel(m){state.model=normalize(structuredClone(m));state.multi=[];s
  save();renderEditor();redraw(true);document.title=plainLabel(state.model.name)+' - GM';$('main').focus({preventScroll:true});}
 function home(){state.page='library';$('library').hidden=false;$('editor').hidden=true;$('model-name').textContent='Models';$('validate').hidden=true;$('saved').textContent='';renderLibrary();document.title='GM - OpenMC geometry studio';$('library').querySelector('h1').focus({preventScroll:true});}
 function art(id){
+ const general=generalArt(id);if(general)return general;
  const hex=['hex19','candu','fast-hex','htgr'].includes(id);let out='<svg viewBox="0 0 230 112" aria-hidden="true">';
  if(id==='pin'){out+='<circle cx="115" cy="56" r="34" fill="#60788f"/><circle cx="115" cy="56" r="28" fill="#6caaa9"/><circle cx="115" cy="56" r="23" fill="#d9dcd3"/><circle cx="115" cy="56" r="21" fill="#d99b58"/>';}
  else if(id==='takeda'){out+='<path d="m80 75 35 16 37-21V34l-35-16-37 21Z" fill="#858993"/><path d="m87 67 28 13 29-17V41l-29-13-28 17Z" fill="#d99b58"/><path d="m110 56 6 3 7-4V40l-7-3-6 4Z" fill="#17191e"/>';}
@@ -42,10 +44,11 @@ function art(id){
  return out+'</svg>';
 }
 function renderLibrary(){
- const query=$('search').value.toLowerCase(),list=STARTERS.filter(x=>(state.filter==='all'||x.family===state.filter)&&x.name.toLowerCase().includes(query));
+ document.querySelectorAll('[data-filter]').forEach(b=>{const family=b.dataset.filter;b.setAttribute('aria-pressed',String(family===state.filter));b.querySelector('span').textContent=STARTERS.filter(x=>family==='all'||family==='general'&&['csg','transport'].includes(x.family)||family==='reactors'&&['components','architectures'].includes(x.family)||x.family===family).length;});
+ const query=$('search').value.toLowerCase(),list=STARTERS.filter(x=>(state.filter==='all'||state.filter==='general'&&['csg','transport'].includes(x.family)||state.filter==='reactors'&&['components','architectures'].includes(x.family)||x.family===state.filter)&&x.name.toLowerCase().includes(query));
  $('models').innerHTML=list.map(x=>'<button class="model-card" data-open="'+x.id+'"><span class="art">'+art(x.id)+'</span><span class="card-name"><span>'+esc(x.name)+'</span>'+(x.family==='architectures'?'<span class="generic">Generic</span>':'<span class="arrow" aria-hidden="true">↗</span>')+'</span></button>').join('')||'<div class="hint">No matching models. <button id="clear-search" class="button">Clear search</button></div>';
  $('recent').innerHTML=state.documents[0]?'<button data-recent="'+esc(state.documents[0].id)+'">↶ '+esc(state.documents[0].name)+'</button>':'';
- $('category-title').textContent={all:'All models',components:'Components',benchmarks:'Benchmarks',architectures:'Reactors'}[state.filter];
+ $('category-title').textContent={all:'All examples',general:'CSG and transport',reactors:'Reactors',components:'Components',benchmarks:'Benchmarks',architectures:'Reactors'}[state.filter];
 }
 function selected(){const s=state.model?.selection;return s?state.model[{cell:'cells',surface:'surfaces',universe:'universes',lattice:'lattices',material:'materials'}[s.kind]]?.find(x=>x.id===s.id):null;}
 function select(kind,id,path=[],additive=false){
@@ -84,17 +87,20 @@ function focusFromView(hit){
 function treeButton(kind,x,extra=''){const s=state.model.selection,active=s?.kind===kind&&s.id===x.id,multi=kind==='cell'&&state.multi?.includes(x.id);return'<button class="tree-row '+extra+(multi?' multi-selected':'')+'" data-select="'+kind+'" data-id="'+x.id+'" aria-pressed="'+(active||multi)+'" title="'+esc(x.name)+(kind==='cell'?' - Shift-click to select multiple':'')+'"><span class="symbol" aria-hidden="true">'+({universe:'◇',cell:multi?'✓':'◈',lattice:'▦',surface:'⌒',material:''}[kind])+'</span><span>'+esc(x.name)+'</span><span class="id">'+({universe:'U',cell:'C',lattice:'L',surface:'S',material:'M'}[kind])+x.id+'</span></button>';}
 function renderTree(){
  const m=state.model;
- $('tree').innerHTML=m.universes.map(u=>'<div class="tree-universe">'+treeButton('universe',u)+m.cells.filter(c=>c.universe===u.id).map(c=>treeButton('cell',c,'cell')).join('')+'</div>').join('')+m.lattices.map(l=>treeButton('lattice',l)).join('');
+ const universeTree=u=>'<div class="tree-universe">'+treeButton('universe',u)+m.cells.filter(c=>c.universe===u.id).map(c=>treeButton('cell',c,'cell')).join('')+'</div>';
+ const root=m.universes.find(u=>u.id===(m.rootUniverse??0)),components=m.universes.filter(u=>u!==root);
+ $('tree').innerHTML=(root?universeTree(root):'')+(components.length?'<details open><summary>Universes</summary>'+components.map(universeTree).join('')+m.lattices.map(l=>treeButton('lattice',l)).join('')+'</details>':'');
  $('surfaces').innerHTML=m.surfaces.map(s=>treeButton('surface',s)).join('');
- $('materials').innerHTML=m.materials.map(x=>'<button class="tree-row" data-select="material" data-id="'+x.id+'"><span class="swatch" style="background:'+esc(x.color)+'"></span>'+esc(x.name)+'</button>').join('');
+ const used=new Set(m.cells.map(c=>c.material));
+ $('materials').innerHTML=m.materials.filter(x=>!x.preset||used.has(x.id)).map(x=>'<button class="tree-row" data-select="material" data-id="'+x.id+'"><span class="swatch" style="background:'+esc(x.color)+'"></span>'+esc(x.name)+'</button>').join('');
  $('counts').textContent=m.cells.length+' cells - '+m.universes.length+' universes';
 }
 function field(label,id,value,type='text'){return'<div class="field"><label for="'+id+'">'+label+'</label><input id="'+id+'" type="'+type+'" value="'+esc(value)+'"></div>';}
 function canFill(id,target){return canContain(state.model,id,target);}
 function options(list,value,empty){return(empty?'<option value="">'+empty+'</option>':'')+list.map(x=>'<option value="'+x.id+'"'+(x.id===value?' selected':'')+'>'+esc(x.name)+' - '+x.id+'</option>').join('');}
 function paramRow(s,key){
- const v=s.params[key],positive=key==='r',range=positive?Math.max(v*2,1):Math.max(Math.abs(v)*2,2),min=positive?.001:-range,label=key==='r'?'Radius':key;
- return'<div class="dimension"><label for="param-'+s.id+'-'+key+'">'+esc(s.name)+' <span>'+label+' - cm</span></label><div class="numeric-row"><input type="range" aria-label="'+esc(s.name)+' '+label+'" data-surface="'+s.id+'" data-param="'+key+'" min="'+min+'" max="'+range+'" step=".001" value="'+v+'"><input id="param-'+s.id+'-'+key+'" type="number" aria-label="'+esc(s.name)+' '+label+' value" data-surface="'+s.id+'" data-param="'+key+'" step=".001"'+(positive?' min=".001"':'')+' value="'+v+'"></div></div>';
+ const v=s.params[key],positive=key==='r',range=positive?Math.max(v*2,1):Math.max(Math.abs(v)*2,2),min=positive?.001:-range,label=key==='r'?'Radius':key,unit=key==='r'||['x0','y0','z0'].includes(key)?' - cm':'';
+ return'<div class="dimension"><label for="param-'+s.id+'-'+key+'">'+esc(s.name)+' <span>'+label+unit+'</span></label><div class="numeric-row"><input type="range" aria-label="'+esc(s.name)+' '+label+'" data-surface="'+s.id+'" data-param="'+key+'" min="'+min+'" max="'+range+'" step=".001" value="'+v+'"><input id="param-'+s.id+'-'+key+'" type="number" aria-label="'+esc(s.name)+' '+label+' value" data-surface="'+s.id+'" data-param="'+key+'" step=".001"'+(positive?' min=".001"':'')+' value="'+v+'"></div></div>';
 }
 function scopeHTML(){return state.occurrence?.path?.length?'<div class="scope" role="group" aria-label="Editing scope"><label><input type="radio" name="scope" value="shared"'+(state.scope==='shared'?' checked':'')+'> Shared universe</label><label><input type="radio" name="scope" value="occurrence"'+(state.scope==='occurrence'?' checked':'')+'> This occurrence</label></div>':'';}
 function renderProperties(){
@@ -104,14 +110,15 @@ function renderProperties(){
  if(s.kind==='cell'){
   const refs=[...new Set((x.region.match(/[+-]?\d+/g)||[]).map(t=>Math.abs(Number(t))))],ss=refs.map(id=>m.surfaces.find(x=>x.id===id)).filter(Boolean);
   html=scopeHTML()+html;
-  html+='<div class="field"><label for="cell-fill">Fill</label><select id="cell-fill">'+options([...m.universes,...m.lattices].filter(u=>canFill(u.id,x.universe)),x.fill,'Material')+'</select></div>';
+  if(x.fill!=null||m.universes.length>1||m.lattices.length)html+='<div class="field"><label for="cell-fill">Fill</label><select id="cell-fill">'+options([...m.universes,...m.lattices].filter(u=>canFill(u.id,x.universe)),x.fill,'Material')+'</select></div>';
   if(x.fill==null)html+='<div class="field"><label for="cell-material">Material</label><select id="cell-material">'+options(m.materials,x.material,'Void')+'</select></div>';
-  if(!x.background)html+='<div class="property-actions top-actions"><button data-action="move">Move</button><button data-action="duplicate">Duplicate</button><button data-action="delete" class="danger"'+(x.background?' disabled':'')+'>Delete</button></div>';
-  if(!x.background)html+='<div class="property-actions"><button data-action="boolean"'+(x.fill!=null?' disabled':'')+'>Combine...</button><button data-action="repeat">Repeat in lattice</button><button data-action="group">Make universe</button></div>';
-  html+='<details class="region-details" open><summary>Region</summary>'+construction.regionTree(x)+'<details><summary>OpenMC expression</summary><div class="field"><label for="region">Surface half-spaces</label><textarea id="region" rows="2" spellcheck="false"'+(x.background?' readonly':'')+'>'+esc(x.region)+'</textarea><div id="region-error" class="validation-error" role="status"></div></div></details></details>';
-  html+='<div class="section-title">Surfaces</div>'+ss.map(s=>Object.keys(s.params).filter(k=>s.type==='sphere'||s.type==='z-cylinder'?k==='r':true).map(k=>paramRow(s,k)).join('')).join('');
+  if(!x.background)html+='<div class="property-actions top-actions"><button data-action="move">Move</button><button data-action="rotate"'+(x.fill!=null?' disabled':'')+'>Rotate</button><button data-action="duplicate">Duplicate</button><button data-action="delete" class="danger"'+(x.background?' disabled':'')+'>Delete</button></div>';
+  if(!x.background)html+='<div class="property-actions"><button data-action="boolean"'+(x.fill!=null?' disabled':'')+'>Combine...</button><button data-action="array">Array</button><button data-action="group">Make universe</button></div>';
+  if(x.primitive&&x.fill==null)html+='<button class="button wide dimensions-button" data-action="dimensions">Edit dimensions</button>';
+  html+='<details class="region-details"'+(x.primitive?'':' open')+'><summary>Region</summary>'+construction.regionTree(x)+'<details><summary>OpenMC expression</summary><div class="field"><label for="region">Surface half-spaces</label><textarea id="region" rows="2" spellcheck="false"'+(x.background?' readonly':'')+'>'+esc(x.region)+'</textarea><div id="region-error" class="validation-error" role="status"></div></div></details></details>';
+  html+='<details'+(x.primitive?'':' open')+'><summary>Surfaces</summary>'+ss.map(s=>Object.keys(s.params).filter(k=>s.type==='sphere'||s.type==='z-cylinder'?k==='r':true).map(k=>paramRow(s,k)).join('')).join('')+'</details>';
   if(x.background)html+='<button class="button" data-build="boundary">Edit background and boundary</button>';
-  if(x.fill!=null)html+='<button id="focus-fill" class="button">Edit fill</button>';
+  if(x.fill!=null)html+='<div class="property-actions"><button id="focus-fill">Edit fill</button><button data-action="repeat">Repeat in lattice</button></div>';
   html+='<div class="property-actions"><button id="isolate" aria-pressed="'+(m.isolated===x.id)+'">Isolate</button><button id="hide">Hide</button><button id="show-all">Show all</button></div>';
   html+='<details><summary>Position - cm</summary>'+['x','y','z'].map((a,i)=>'<div class="field"><label for="translate-'+i+'">'+a+'</label><input id="translate-'+i+'" type="number" data-translate="'+i+'" step=".01" value="'+(x.editorTranslation?.[i]||x.translation?.[i]||0)+'"></div>').join('')+'</details>';
  }else if(s.kind==='surface'){
@@ -119,7 +126,7 @@ function renderProperties(){
   html+='<div class="field"><label for="boundary">Boundary</label><select id="boundary">'+['transmission','vacuum','reflective','periodic','white'].map(v=>'<option'+((x.boundaryType||'transmission')===v?' selected':'')+'>'+v+'</option>').join('')+'</select></div>';
   html+='<div class="section-title">Used by</div>'+m.cells.filter(c=>(c.region.match(/[+-]?\d+/g)||[]).some(t=>Math.abs(Number(t))===x.id)).map(c=>treeButton('cell',c)).join('');
  }else if(s.kind==='universe'){
-  html+='<div class="property-actions"><button data-build="pin">Add pin</button><button data-build="box">Add cell</button>'+(x.id!==0?'<button data-action="repeat">Repeat in lattice</button>':'')+(x.builder?.type==='pin'?'<button data-edit-pin="'+x.id+'">Edit layers</button>':'')+'</div>';
+  html+='<div class="property-actions"><button data-build="box">Add box</button><button data-build="cylinder">Add cylinder</button>'+(x.id!==0?'<button data-action="repeat">Repeat in lattice</button>':'')+(x.builder?.type==='pin'?'<button data-edit-pin="'+x.id+'">Edit layers</button>':'')+'</div>';
   html+='<div class="section-title">Cells</div>'+m.cells.filter(c=>c.universe===x.id).map(c=>treeButton('cell',c)).join('');
   html+='<div class="property-actions"><button id="show-all">Show all</button><button id="explode" aria-pressed="'+!!m.exploded+'">Explode</button><button id="measure">Measure</button></div>';
   if(x.id===0)html+='<details><summary>Model</summary><div class="field">'+field('Model name','document-name',m.name)+'</div><div class="hint">'+esc(m.metadata?.source||'GM')+(m.metadata?.sourceVersion?' - '+esc(m.metadata.sourceVersion):'')+'</div>'+(m.metadata?.sourceUrl?'<a class="hint" href="'+esc(m.metadata.sourceUrl)+'" target="_blank" rel="noopener">Source ↗</a>':'')+'<p class="hint">'+esc(m.metadata?.notes)+'</p></details>';
@@ -224,10 +231,10 @@ function finishTransaction(){if(state.transaction&&JSON.stringify(state.transact
 document.addEventListener('focusout',finishTransaction);
 document.addEventListener('input',e=>{
  const t=e.target;if(t.closest('#command-dialog'))return;
- if(t.dataset.surface){const n=Number(t.value);if(!Number.isFinite(n)||(t.dataset.param==='r'&&n<=0))return;const old=Number(t.dataset.surface),id=applyScope(old),s=state.model.surfaces.find(s=>s.id===id);s.params[t.dataset.param]=n;
+ if(t.dataset.surface){const n=Number(t.value);if(!Number.isFinite(n)||(t.dataset.param==='r'&&n<=0))return;const old=Number(t.dataset.surface),id=applyScope(old),s=state.model.surfaces.find(s=>s.id===id);s.params[t.dataset.param]=n;for(const c of state.model.cells)if((c.region.match(/[+-]?\d+/g)||[]).some(t=>Math.abs(Number(t))===id))delete c.primitive;
  t.closest('.numeric-row').querySelectorAll('input').forEach(i=>{i.dataset.surface=id;if(i!==t)i.value=n;});syncDomains(state.model);save();redraw();return;}
  let x=selected();if(!x)return;if(state.model.selection.kind==='cell'&&(t.id==='region'||t.dataset.translate!=null)){applyScope(null);x=selected();}
- if(t.id==='region'){try{parseRegion(t.value);$('region-error').textContent='';}catch(error){$('region-error').textContent=error.message;return;}if(!state.transaction)history();x.region=t.value;x.builderPlacement=false;syncDomains(state.model);save();redraw();}
+ if(t.id==='region'){try{parseRegion(t.value);$('region-error').textContent='';}catch(error){$('region-error').textContent=error.message;return;}if(!state.transaction)history();x.region=t.value;x.builderPlacement=false;delete x.primitive;syncDomains(state.model);save();redraw();}
  if(t.id==='material-color'){x.color=t.value;save();redraw();}
  if(t.id==='density'){if(Number(t.value)>0){x.density=Number(t.value);save();redraw();}}
  if(t.dataset.translate!=null){const tr=[...(x.editorTranslation||x.translation||[0,0,0])];tr[Number(t.dataset.translate)]=Number(t.value)||0;translateCell(state.model,x,tr);syncDomains(state.model);save();redraw();}
@@ -248,11 +255,11 @@ document.addEventListener('change',e=>{
  if(t.id==='nuclides'){try{const ns=t.value.trim().split('\n').filter(Boolean).map(row=>{const [name,val]=row.trim().split(/\s+/);if(!/^[A-Z][a-z]?\d+$/.test(name)||!(Number(val)>0))throw new Error('Use one nuclide and positive fraction per line, e.g. U235 0.03.');return{name,fraction:Number(val),basis:'ao'};});mutate(()=>x.nuclides=ns);}catch(error){$('nuclide-error').textContent=error.message;}}
 });
 function commands(){
- const q=$('command-search').value.toLowerCase(),list=[['New geometry','empty'],['Add cylinder','cylinder'],['Add sphere','sphere'],['Add box','box'],['Open models','home'],['Fit geometry','fit'],['Export model','export'],['Undo','undo'],['Redo','redo'],...STARTERS.map(x=>[x.name,'model:'+x.id])];
+ const q=$('command-search').value.toLowerCase(),list=[['New geometry','empty'],['Add cylinder','cylinder'],['Add sphere','sphere'],['Add box','box'],['Add tube','tube'],['Add spherical shell','shell'],['Open models','home'],['Fit geometry','fit'],['Export model','export'],['Undo','undo'],['Redo','redo'],...STARTERS.map(x=>[x.name,'model:'+x.id])];
  $('commands').innerHTML=list.filter(([name])=>name.toLowerCase().includes(q)).map(([name,key])=>'<button data-command="'+key+'">'+esc(name)+'</button>').join('');
 }
 $('command').onclick=()=>{commands();dialog('command-dialog');$('command-search').focus();};$('command-search').oninput=commands;
-document.addEventListener('click',e=>{const key=e.target.closest('[data-command]')?.dataset.command;if(!key)return;$('command-dialog').close();if(key.startsWith('model:'))openModel(createModelForTemplate(key.slice(6)));else if(key==='home')home();else if(key==='empty')openModel(createEmptyModel());else if(['cylinder','sphere','box'].includes(key)){if(!state.model)openModel(createEmptyModel());construction.open(key);}else $(key).click();});
+document.addEventListener('click',e=>{const key=e.target.closest('[data-command]')?.dataset.command;if(!key)return;$('command-dialog').close();if(key.startsWith('model:'))openModel(createModelForTemplate(key.slice(6)));else if(key==='home')home();else if(key==='empty')openModel(createEmptyModel());else if(['cylinder','sphere','box','tube','shell'].includes(key)){if(!state.model)openModel(createEmptyModel());construction.open(key);}else $(key).click();});
 document.addEventListener('keydown',e=>{
  const editing=e.target.matches('input,textarea,select');
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('command').click();}
@@ -266,7 +273,7 @@ window.gmStudio={
  getModel:()=>structuredClone(state.model),catalog:()=>STARTERS,
  construct:(operation,spec)=>{if(!state.model)openModel(createEmptyModel());const draft=structuredClone(state.model);constructGeometry(draft,operation,spec);const issues=validateModel(draft);if(issues.length)throw new Error(issues.join(' '));mutate(m=>Object.assign(m,draft),{fit:true});return structuredClone(state.model);},
  open:id=>{openModel(id==='empty'?createEmptyModel():createModelForTemplate(id));return structuredClone(state.model);},
- setSurface:(id,params)=>{mutate(m=>{const s=m.surfaces.find(s=>s.id===Number(id));if(!s)throw new Error('Surface not found.');for(const [k,v]of Object.entries(params)){if(!Number.isFinite(v)||(k==='r'&&v<=0))throw new Error('Enter valid surface coefficients.');if(!(k in s.params))throw new Error('Unknown surface coefficient.');s.params[k]=v;}});return structuredClone(state.model);},
+ setSurface:(id,params)=>{mutate(m=>{const s=m.surfaces.find(s=>s.id===Number(id));if(!s)throw new Error('Surface not found.');for(const [k,v]of Object.entries(params)){if(!Number.isFinite(v)||(k==='r'&&v<=0))throw new Error('Enter valid surface coefficients.');if(!(k in s.params))throw new Error('Unknown surface coefficient.');s.params[k]=v;}for(const c of m.cells)if((c.region.match(/[+-]?\d+/g)||[]).some(t=>Math.abs(Number(t))===s.id))delete c.primitive;});return structuredClone(state.model);},
  add:type=>{if(!state.model)openModel(createEmptyModel());if(!['cylinder','sphere','box','pin','pwr17'].includes(type))throw new Error('Unknown geometry type.');mutate(m=>['pin','pwr17'].includes(type)?addComponent(m,type):addPrimitive(m,type));return structuredClone(state.model);},
  paint:(id,indices,universe)=>{mutate(m=>{const l=m.lattices.find(l=>l.id===Number(id));if(!l||!m.universes.some(u=>u.id===Number(universe)))throw new Error('Lattice or universe not found.');for(const index of indices){if(!l.cells[index])throw new Error('Position not found.');l.cells[index].universe=Number(universe);}});return structuredClone(state.model);},
  focus:(universe)=>{if(!state.model.universes.some(u=>u.id===Number(universe)))throw new Error('Universe not found.');select('universe',Number(universe));return structuredClone(state.model);},
@@ -274,7 +281,7 @@ window.gmStudio={
 };
 if(navigator.modelContext?.registerTool){
  for(const tool of [
- {name:'geometry_construct',description:'Construct or edit canonical geometry locally. Operations: cell, pin, lattice, universe, place, combine, move, duplicate, delete, group. Dimensions in cm. Spec follows public/docs/construction.md.',inputSchema:{type:'object',properties:{operation:{type:'string',enum:['cell','pin','lattice','universe','place','combine','move','duplicate','delete','group']},spec:{type:'object'}},required:['operation','spec']},execute:async({operation,spec})=>JSON.stringify(window.gmStudio.construct(operation,spec))},
+ {name:'geometry_construct',description:'Construct or edit canonical geometry locally. Operations: cell, pin, lattice, universe, place, combine, move, rotate, array, edit, duplicate, delete, group. Dimensions in cm. Spec follows public/docs/construction.md.',inputSchema:{type:'object',properties:{operation:{type:'string',enum:['cell','pin','lattice','universe','place','combine','move','rotate','array','edit','duplicate','delete','group']},spec:{type:'object'}},required:['operation','spec']},execute:async({operation,spec})=>JSON.stringify(window.gmStudio.construct(operation,spec))},
  {name:'geometry_catalog',description:'List editable model examples.',inputSchema:{type:'object',properties:{}},execute:async()=>JSON.stringify(STARTERS)},
  {name:'geometry_open',description:'Open an example or empty geometry in the current workspace.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id']},execute:async({id})=>JSON.stringify(window.gmStudio.open(id))},
  {name:'geometry_add',description:'Add a primitive or component.',inputSchema:{type:'object',properties:{type:{type:'string',enum:['cylinder','sphere','box','pin','pwr17']}},required:['type']},execute:async({type})=>JSON.stringify(window.gmStudio.add(type))},

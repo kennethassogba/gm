@@ -16,13 +16,13 @@ The dev server serves the built files at the address it prints. Rebuild after so
 
 ## Editor
 
-- 13 editable examples and an empty geometry.
+- 21 editable examples and an empty geometry.
 - Canonical CSG surfaces, regions, cells, materials, universes and rectangular/hexagonal lattices.
 - Instanced GPU 3D, synchronized CSG sections, selection, isolation and cutaway.
 - Shared-universe or single-occurrence edits, lattice painting, translations, undo/redo and local autosave.
 - XML import/export and a standalone, editable Python OpenMC model.
 
-Complex Boolean meshes use interpolated implicit surfaces in a worker. Sections evaluate canonical regions. Source notes remain in model metadata and [example documentation](public/docs/benchmarks/index.html). Material recipes are illustrative. Exports were parsed and re-exported with the OpenMC 0.15.3 Python API, with matching cell queries on 1,360 points across the 13 examples and four construction fixtures. No transport solver is bundled. DAGMC CAD import, rotated universes, distributed materials, settings and tallies are not implemented. 3D meshes approximate the CSG surfaces; XML, Python and section queries use canonical regions.
+Complex Boolean meshes use interpolated implicit surfaces in a worker. Sections evaluate canonical regions. Source notes remain in model metadata and [example documentation](public/docs/benchmarks/index.html). Material recipes are illustrative. CI parses XML and executes exported Python with OpenMC 0.15.3, then compares cell queries with the canonical model for every example. No transport solver is bundled. DAGMC CAD import, rotated universes, distributed materials, settings and tallies are not implemented. 3D meshes approximate the CSG surfaces; XML, Python and section queries use canonical regions.
 
 ## Construction
 

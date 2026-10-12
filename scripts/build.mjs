@@ -13,7 +13,7 @@ await build({ entryPoints: [path.join(root, "public/app.js")], bundle: true, for
 await mkdir(path.join(output, "api"), { recursive: true });
 const catalog = {
   name: "GM Studio model catalog",
-  version: "0.2.0",
+  version: "0.3.0",
   localDataPolicy: "Model documents stay in the browser unless you export or provide them to an agent tool.",
   entries: STARTERS.map(({ id, name, family, kind, status, subtitle, source, version, href, sourceNote, simplification, note }) => ({
     id, name, family, kind, status, subtitle,

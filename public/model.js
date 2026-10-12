@@ -1,3 +1,4 @@
+import {identity,transformSurface} from './transforms.js';
 import {CORE_ROWS, GUIDE_POSITIONS} from './source-map.js';
 import {pythonModel} from './python-export.js';
 import {getRecipe,resolveSpec,applyRecipeStep} from './recipes.js';
@@ -8,6 +9,7 @@ export const BENCHMARKS=[
 {id:'takeda',name:'Takeda',source:'OECD NEA',version:'NEA/NSC/DOC(2000)4',href:'https://www.oecd-nea.org/jcms/pl_17440/3-d-radiation-transport-benchmarks-for-simple-geometries-with-void-region',simplification:'Box-core, reflector and void-channel adaptation. Illustrative dimensions and recipes; not an exact reference variant.'}
 ].map(x=>({...x,family:'benchmarks'}));
 export const STARTERS=[
+{id:'drilled-block',name:'Drilled block',family:'csg'},{id:'joined-pipes',name:'Pipe junction',family:'csg'},{id:'spherical-shell',name:'Spherical shell',family:'csg'},{id:'slab-shield',name:'Layered shield',family:'transport'},{id:'shield-duct',name:'Shield with duct',family:'transport'},{id:'collimator',name:'Collimator',family:'transport'},{id:'detector',name:'Detector housing',family:'transport'},{id:'nested-spheres',name:'Reflected sphere',family:'transport'},
 {id:'pin',name:'Fuel pin',family:'components'},{id:'pwr17',name:'PWR 17 × 17',family:'components'},{id:'bwr9',name:'BWR assembly',family:'components'},{id:'hex19',name:'Hexagonal lattice',family:'components'},...BENCHMARKS,
 {id:'pwr-core',name:'PWR',family:'architectures'},{id:'bwr-core',name:'BWR',family:'architectures'},{id:'candu',name:'CANDU',family:'architectures'},{id:'fast-hex',name:'Fast reactor',family:'architectures'},{id:'htgr',name:'HTGR',family:'architectures'}
 ].map(x=>({kind:'editable',status:x.family==='architectures'?'Generic':'Example',...x}));
@@ -16,8 +18,8 @@ export function createEmptyModel(name='Untitled geometry'){
 return {schema:'gm-openmc-model/v1',id:crypto.randomUUID(),name,kind:'empty',units:'cm',metadata:{exportable:true,notes:''},surfaces:[],cells:[],materials:[],universes:[{id:0,name:'Geometry',bounds:[-2,2,-2,2,-2,2]}],lattices:[],selection:null,focus:{universe:0,path:[]},view:'3d',cutaway:false,exploded:false,colorBy:'material'};
 }
 export function recipes(m){
-const data=[['UO₂','#d99b58',10.3,[['U235',.031],['U238',.969],['O16',2]]],['Helium','#d9dcd3',.0016,[['He4',1]]],['Zircaloy','#6caaa9',6.55,[['Zr90',1]]],['Water','#60788f',.74,[['H1',2],['O16',1]]],['Graphite','#888a91',1.7,[['C12',1]]],['MOX','#a191bf',10.4,[['U238',.94],['Pu239',.06],['O16',2]]],['Sodium','#9eac94',.85,[['Na23',1]]],['Steel','#8896a1',7.8,[['Fe56',1]]],['Heavy water','#7390a5',1.1,[['H2',2],['O16',1]]]];
-m.materials=data.map(([name,color,density,ns],i)=>({id:i+1,name,color,density,densityUnits:'g/cm3',nuclides:ns.map(([name,fraction])=>({name,fraction,basis:'ao'}))}));
+const data=[['UO₂','#d99b58',10.3,[['U235',.031],['U238',.969],['O16',2]]],['Helium','#d9dcd3',.0016,[['He4',1]]],['Zircaloy','#6caaa9',6.55,[['Zr90',1]]],['Water','#60788f',.74,[['H1',2],['O16',1]]],['Graphite','#888a91',1.7,[['C12',1]]],['MOX','#a191bf',10.4,[['U238',.94],['Pu239',.06],['O16',2]]],['Sodium','#9eac94',.85,[['Na23',1]]],['Steel','#8896a1',7.8,[['Fe56',1]]],['Heavy water','#7390a5',1.1,[['H2',2],['O16',1]]],['Aluminium','#a6bac4',2.7,[['Al27',1]]],['Lead','#9e91ba',11.34,[['Pb208',1]]],['Polyethylene','#d9bd89',.94,[['H1',2],['C12',1]]],['Air','#839cad',.001205,[['N14',.78],['O16',.21],['Ar40',.01]]],['Concrete','#afa89a',2.3,[['O16',.6],['Si28',.2],['Ca40',.1],['H1',.1]]],['Germanium','#65b9ba',5.323,[['Ge74',1]]],['Tungsten','#8b96ae',19.3,[['W184',1]]]];
+m.materials=data.map(([name,color,density,ns],i)=>({id:i+1,name,color,density,preset:true,libraryGroup:[0,2,5,6,8].includes(i)?'reactor':'general',densityUnits:'g/cm3',nuclides:ns.map(([name,fraction])=>({name,fraction,basis:'ao'}))}));
 }
 export function surf(m,name,type,params,boundaryType){const id=nextId(m.surfaces);m.surfaces.push({id,name,type,params,...(boundaryType?{boundaryType}:{})});return id;}
 export function cell(m,universe,name,region,material,fill=null){const id=nextId(m.cells);m.cells.push({id,universe,name,region,material,fill});return id;}
@@ -93,7 +95,7 @@ const xe=v=>String(v??'').replaceAll('&','&amp;').replaceAll('"','&quot;').repla
 export function exportGeometryXML(m){
 m=activeGeometry(m);
 const lines=['<?xml version="1.0" encoding="utf-8"?>','<geometry>'];
-for(const s of m.surfaces){const p=s.params,c=s.type==='sphere'?[p.x0,p.y0,p.z0,p.r]:s.type.endsWith('-cylinder')?[...['x0','y0','z0'].filter(k=>k[0]!==s.type[0]).map(k=>p[k]),p.r]:s.type==='plane'?[p.a,p.b,p.c,p.d]:[Object.values(p)[0]];lines.push('  <surface id="'+s.id+'" name="'+xe(s.name)+'" type="'+s.type+'" coeffs="'+c.map(x=>Number(x)||0).join(' ')+'"'+(s.boundaryType?' boundary="'+s.boundaryType+'"':'')+' />');}
+for(const s of m.surfaces){const p=s.params,c=s.type==='sphere'?[p.x0,p.y0,p.z0,p.r]:s.type.endsWith('-cylinder')?[...['x0','y0','z0'].filter(k=>k[0]!==s.type[0]).map(k=>p[k]),p.r]:s.type==='quadric'?['a','b','c','d','e','f','g','h','j','k'].map(k=>p[k]):s.type==='plane'?[p.a,p.b,p.c,p.d]:[Object.values(p)[0]];lines.push('  <surface id="'+s.id+'" name="'+xe(s.name)+'" type="'+s.type+'" coeffs="'+c.map(x=>Number(x)||0).join(' ')+'"'+(s.boundaryType?' boundary="'+s.boundaryType+'"':'')+' />');}
 for(const c of m.cells)lines.push('  <cell id="'+c.id+'" name="'+xe(c.name)+'" universe="'+c.universe+'"'+(c.fill!=null?' fill="'+c.fill+'"':' material="'+(c.material??'void')+'"')+(c.region?' region="'+xe(c.region.replaceAll(':','|'))+'"':'')+(c.translation?' translation="'+c.translation.join(' ')+'"':'')+' />');
 for(const l of m.lattices){
 if(l.type==='rectangular')lines.push('  <lattice id="'+l.id+'" name="'+xe(l.name)+'" dimension="'+l.dimension.join(' ')+'" outer="'+l.outer+'">','    <lower_left>'+l.lowerLeft.join(' ')+'</lower_left>','    <pitch>'+l.pitch.join(' ')+'</pitch>','    <universes>'+l.cells.map(e=>e.universe).join(' ')+'</universes>','  </lattice>');
@@ -115,7 +117,7 @@ export function activeGeometry(m){
 export function exportPython(m){return pythonModel(m);}
 export function importGeometryXML(text){
  const doc=new DOMParser().parseFromString(text,'application/xml');if(doc.querySelector('parsererror')||!doc.querySelector('geometry'))throw new Error('Open a valid geometry.xml file.');const m=createEmptyModel('Imported geometry'),get=(e,k)=>e.getAttribute(k)??e.querySelector(k)?.textContent?.trim(),nums=(e,k)=>(get(e,k)||'').split(/\s+/).filter(Boolean).map(Number);
- for(const s of doc.querySelectorAll('surface')){const type=get(s,'type');if(!['sphere','x-cylinder','y-cylinder','z-cylinder','plane','x-plane','y-plane','z-plane'].includes(type))throw new Error('Unsupported surface: '+type);const c=nums(s,'coeffs'),keys=type==='sphere'?['x0','y0','z0','r']:type.endsWith('-cylinder')?[...['x0','y0','z0'].filter(k=>k[0]!==type[0]),'r']:type==='plane'?['a','b','c','d']:[type[0]+'0'];m.surfaces.push({id:Number(get(s,'id')),name:get(s,'name')||type,type,params:Object.fromEntries(keys.map((k,i)=>[k,c[i]])),boundaryType:get(s,'boundary')||undefined});}
+ for(const s of doc.querySelectorAll('surface')){const type=get(s,'type');if(!['sphere','x-cylinder','y-cylinder','z-cylinder','quadric','plane','x-plane','y-plane','z-plane'].includes(type))throw new Error('Unsupported surface: '+type);const c=nums(s,'coeffs'),keys=type==='sphere'?['x0','y0','z0','r']:type.endsWith('-cylinder')?[...['x0','y0','z0'].filter(k=>k[0]!==type[0]),'r']:type==='quadric'?['a','b','c','d','e','f','g','h','j','k']:type==='plane'?['a','b','c','d']:[type[0]+'0'];m.surfaces.push({id:Number(get(s,'id')),name:get(s,'name')||type,type,params:Object.fromEntries(keys.map((k,i)=>[k,c[i]])),boundaryType:get(s,'boundary')||undefined});}
  for(const c of doc.querySelectorAll('cell')){if(get(c,'rotation'))throw new Error('Rotated universes are not supported.');const material=get(c,'material');if(material?.trim().split(/\s+/).length>1)throw new Error('Distributed materials are not supported.');m.cells.push({id:Number(get(c,'id')),name:get(c,'name')||'Cell',universe:Number(get(c,'universe')||0),material:get(c,'fill')!=null||material==='void'?null:Number(material),fill:get(c,'fill')!=null?Number(get(c,'fill')):null,region:get(c,'region')||'',...(get(c,'translation')?{translation:nums(c,'translation')}: {})});}
  const ids=[...new Set(m.cells.map(c=>c.universe))];m.universes=ids.map(id=>({id,name:'Universe '+id,bounds:[-10,10,-10,10,-10,10]}));
  for(const l of doc.querySelectorAll('lattice')){const values=nums(l,'universes'),d=nums(l,'dimension');m.lattices.push({id:Number(get(l,'id')),name:get(l,'name')||'Lattice',type:'rectangular',dimension:d,pitch:nums(l,'pitch'),lowerLeft:nums(l,'lower_left'),outer:Number(get(l,'outer')),cells:values.map((u,i)=>({x:i%d[0],y:Math.floor(i/d[0])%d[1],z:Math.floor(i/(d[0]*d[1])),universe:u}))});}
@@ -129,10 +131,11 @@ export function translateCell(m,c,value){
  const old=c.editorTranslation||c.translation||[0,0,0],delta=value.map((v,i)=>v-old[i]);
  if(!c.transformSurfacesCloned){const map=new Map();c.region=c.region.replace(/[+-]?\d+/g,t=>{const id=Math.abs(Number(t));if(!map.has(id)){const s=structuredClone(m.surfaces.find(s=>s.id===id));s.id=nextId(m.surfaces);m.surfaces.push(s);map.set(id,s.id);}return(t.startsWith('-')?'-':'')+map.get(id);});c.transformSurfacesCloned=true;}
  for(const id of new Set((c.region.match(/[+-]?\d+/g)||[]).map(t=>Math.abs(Number(t))))){const s=m.surfaces.find(s=>s.id===id),p=s.params;
- if(s.type==='plane')p.d+=p.a*delta[0]+p.b*delta[1]+p.c*delta[2];
+ if(s.type==='quadric')transformSurface(s,identity,delta);
+ else if(s.type==='plane')p.d+=p.a*delta[0]+p.b*delta[1]+p.c*delta[2];
  else for(let i=0;i<3;i++){const key='xyz'[i]+'0';if(key in p)p[key]+=delta[i];}
  }
- if(c.fill!=null)c.translation=value;else delete c.translation;c.editorTranslation=value;
+ if(c.fill!=null)c.translation=value;else delete c.translation;c.editorTranslation=value;if(c.primitive)c.primitive.position=[...value];
 }
 export function updateLatticePitch(m,l,value){
  const scale=value/l.pitch[0];l.pitch=l.pitch.map((v,i)=>i<2?v*scale:v);if(l.lowerLeft)l.lowerLeft=l.lowerLeft.map((v,i)=>i<2?v*scale:v);

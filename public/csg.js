@@ -14,6 +14,7 @@ export function surfaceValue(s,p) {
  case 'y-cylinder':return Math.hypot(p[0]-(a.x0||0),p[2]-(a.z0||0))-a.r;
  case 'sphere':return Math.hypot(p[0]-(a.x0||0),p[1]-(a.y0||0),p[2]-(a.z0||0))-a.r;
  case 'x-plane':return p[0]-a.x0;case 'y-plane':return p[1]-a.y0;case 'z-plane':return p[2]-a.z0;
+ case 'quadric':{const [x,y,z]=p;return a.a*x*x+a.b*y*y+a.c*z*z+a.d*x*y+a.e*y*z+a.f*x*z+a.g*x+a.h*y+a.j*z+a.k;}
  case 'plane':return a.a*p[0]+a.b*p[1]+a.c*p[2]-a.d;
  default:throw new Error('Unsupported surface: '+s.type);
  }
@@ -49,7 +50,7 @@ export function cellBounds(c,surfaces,defaultBounds){
 export function shapeForCell(c,surfaces,bounds){
  if(/[():~|]/.test(c.region))return{type:'csg'};
  const refs=(String(c.region).match(/[+-]?\d+/g)||[]).map(t=>({s:surfaces.get(Math.abs(Number(t))),negative:Number(t)<0}));
- if(refs.some(x=>['plane','x-cylinder','y-cylinder'].includes(x.s?.type)))return{type:'csg'};
+ if(refs.some(x=>['plane','quadric','x-cylinder','y-cylinder'].includes(x.s?.type)))return{type:'csg'};
  const cylinders=refs.filter(x=>x.s?.type==='z-cylinder'),sphere=refs.find(x=>x.negative&&x.s?.type==='sphere');
  if(sphere){if(refs.some(x=>x.s?.type==='sphere'&&x!==sphere)||bounds.some((v,k)=>k%2?v<sphere.s.params['xyz'[Math.floor(k/2)]+'0']+sphere.s.params.r:v>sphere.s.params['xyz'[Math.floor(k/2)]+'0']-sphere.s.params.r))return{type:'csg'};}
  if(sphere)return{type:'sphere',radius:sphere.s.params.r,center:[sphere.s.params.x0||0,sphere.s.params.y0||0,sphere.s.params.z0||0]};

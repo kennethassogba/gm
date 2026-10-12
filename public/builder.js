@@ -1,5 +1,6 @@
 import {surf,cell,uni,box,nextId,recipes,hexPositions,translateCell,latticePosition} from './model.js';
 import {parseRegion,regionValue,cellBounds} from './csg.js';
+import {rotationMatrix,vector,transformSurface} from './transforms.js';
 import {GUIDE_POSITIONS,CORE_ROWS} from './source-map.js';
 
 const finite=(value,name)=>{const n=Number(value);if(!Number.isFinite(n))throw new Error('Enter a number for '+name+'.');return n;};
@@ -13,13 +14,17 @@ export function mergeBounds(list){return Array.from({length:6},(_,i)=>i%2?Math.m
 export function focusUniverse(m,id){m.focus={universe:id,path:[]};m.selection={kind:'universe',id};m.view='3d';m.isolated=null;}
 
 export function createCell(m,spec){
- if(!['sphere','cylinder','box','hexprism','region'].includes(spec.type))throw new Error('Choose a supported cell shape.');
+ if(!['sphere','shell','cylinder','tube','box','hexprism','region'].includes(spec.type))throw new Error('Choose a supported cell shape.');
  const u=spec.universe??m.focus.universe,name=spec.name?.trim()||'Cell',p=(spec.position||[0,0,0]).map((v,i)=>finite(v,'XYZ'[i])),d=spec.size||[1.6,1.6,2];
  let region;
- if(spec.type==='sphere')region='-'+surf(m,name,'sphere',{x0:p[0],y0:p[1],z0:p[2],r:positive(spec.radius,'Radius')});
- else if(spec.type==='cylinder'){
-  const r=positive(spec.radius,'Radius'),h=positive(spec.height,'Height'),axis=spec.axis||'z',i='xyz'.indexOf(axis),keys=['x0','y0','z0'].filter((_,j)=>i!==j);
+ if(spec.type==='sphere'||spec.type==='shell'){
+  const r=positive(spec.radius,'Outer radius');region='-'+surf(m,name,'sphere',{x0:p[0],y0:p[1],z0:p[2],r});
+  if(spec.type==='shell'){const inner=positive(spec.innerRadius,'Inner radius');if(inner>=r)throw new Error('Inner radius must be smaller than outer radius.');region+=' '+surf(m,name+' inner','sphere',{x0:p[0],y0:p[1],z0:p[2],r:inner});}
+ }
+ else if(spec.type==='cylinder'||spec.type==='tube'){
+  const r=positive(spec.radius,'Radius'),h=positive(spec.height,'Height'),axis=spec.axis||'z',i='xyz'.indexOf(axis),keys=['x0','y0','z0'].filter((_,j)=>i!==j);if(i<0)throw new Error('Choose X, Y or Z as the axis.');
   const s=surf(m,name,axis+'-cylinder',Object.fromEntries([...keys.map(k=>[k,p['xyz'.indexOf(k[0])]]),['r',r]])),lo=surf(m,name+' bottom',axis+'-plane',{[axis+'0']:p[i]-h/2}),hi=surf(m,name+' top',axis+'-plane',{[axis+'0']:p[i]+h/2});region='-'+s+' '+lo+' -'+hi;
+  if(spec.type==='tube'){const inner=positive(spec.innerRadius,'Inner radius');if(inner>=r)throw new Error('Inner radius must be smaller than outer radius.');region+=' '+surf(m,name+' inner',axis+'-cylinder',Object.fromEntries([...keys.map(k=>[k,p['xyz'.indexOf(k[0])]]),['r',inner]]));}
  }else if(spec.type==='hexprism'){
   const width=positive(spec.width,'Across flats'),height=positive(spec.height,'Height');
   const sides=Array.from({length:6},(_,i)=>{const a=Math.cos(i*Math.PI/3),b=Math.sin(i*Math.PI/3);return '-'+surf(m,name+' side '+(i+1),'plane',{a,b,c:0,d:width/2+a*p[0]+b*p[1]});});
@@ -31,8 +36,36 @@ export function createCell(m,spec){
   const sizes=d.map((v,i)=>positive(v,'XYZ'[i]+' size'));region=box(m,name,p.flatMap((v,i)=>[v-sizes[i]/2,v+sizes[i]/2]));
  }
  const id=cell(m,u,name,region,spec.material==null?null:Number(spec.material));
- const c=m.cells.find(c=>c.id===id);c.editorTranslation=p;
+ const c=m.cells.find(c=>c.id===id);c.editorTranslation=p;if(spec.type!=='region')c.primitive={...structuredClone(spec),position:p};
  m.kind='geometry';m.selection={kind:'cell',id};m.focus={universe:u,path:[]};m.view='3d';syncUniverse(m,u);return id;
+}
+
+export function editCell(m,id,spec){
+ const old=m.cells.find(c=>c.id===id);if(!old||!old.primitive||old.fill!=null)throw new Error('Choose a primitive cell.');
+ m.cells=m.cells.filter(c=>c!==old);const created=createCell(m,{...spec,universe:old.universe}),c=m.cells.find(c=>c.id===created);c.id=id;c.hidden=old.hidden;m.selection={kind:'cell',id};syncDomains(m);return id;
+}
+export function rotateCells(m,ids,angles,pivot){
+ if(angles.length!==3||!angles.every(Number.isFinite)||pivot.length!==3||!pivot.every(Number.isFinite))throw new Error('Enter three finite angles and pivot coordinates.');
+ const cs=m.cells.filter(c=>ids.includes(c.id)&&!c.background);if(!cs.length)throw new Error('Select cells to rotate.');if(cs.some(c=>c.fill!=null))throw new Error('Open the universe and rotate its material cells.');
+ if(angles.every(v=>v===0))return cs[0].id;
+ const r=rotationMatrix(angles),offset=pivot.map((v,i)=>v-vector(r,pivot)[i]);
+ for(const c of cs){
+  const bounds=getCellBounds(m,c);if(bounds.some(v=>Math.abs(v)>=1e5))throw new Error('Bound the cell before rotating.');
+  c.transformSurfacesCloned=false;translateCell(m,c,c.editorTranslation||[0,0,0]);
+  for(const id of surfaceIds(c.region))transformSurface(m.surfaces.find(s=>s.id===id),r,offset);
+  const corners=Array.from({length:8},(_,i)=>vector(r,[bounds[i&1],bounds[2+(i>>1&1)],bounds[4+(i>>2&1)]]).map((v,j)=>v+offset[j]));
+  const rotated=Array.from({length:6},(_,i)=>(i%2?Math.max:Math.min)(...corners.map(p=>p[i>>1])));
+  c.region='('+c.region+') '+box(m,c.name+' bounds',rotated);delete c.primitive;c.editorTranslation=vector(r,c.editorTranslation||[0,0,0]).map((v,i)=>v+offset[i]);
+ }syncDomains(m);return cs[0].id;
+}
+export function arrayCells(m,ids,counts=[3,1,1],spacing=[2,0,0]){
+ if(!Array.isArray(counts)||counts.length!==3||!Array.isArray(spacing)||spacing.length!==3)throw new Error('Provide counts and spacing for X, Y and Z.');
+ if(!ids.length||ids.some(id=>!m.cells.some(c=>c.id===id&&!c.background)))throw new Error('Select cells to repeat.');
+ counts=counts.map((v,i)=>integer(v,'XYZ'[i]+' count',50));spacing=spacing.map((v,i)=>finite(v,'XYZ'[i]+' spacing'));
+ if(counts.reduce((a,b)=>a*b,1)*ids.length>500)throw new Error('Use at most 500 cells per array, or use a lattice.');
+ if(counts.some((v,i)=>v>1&&spacing[i]===0))throw new Error('Set spacing on each repeated axis.');
+ const copies=[];for(let z=0;z<counts[2];z++)for(let y=0;y<counts[1];y++)for(let x=0;x<counts[0];x++)if(x||y||z)copies.push(...duplicateCells(m,ids,[x*spacing[0],y*spacing[1],z*spacing[2]]));
+ if(copies.length)m.selection={kind:'cell',id:copies[0]};return copies;
 }
 
 export function resizePlacements(m,id,bounds){
@@ -128,7 +161,7 @@ export function combineCells(m,{a,b,operation,name,material,keepTool=false}){
  const op=operation==='union'?' | ':operation==='intersection'?' ':' ~';
  first.region='('+first.region+')'+op+'('+other.region+')';parseRegion(first.region);
  if(operation==='intersection'){const b=getCellBounds(m,first);if(b.some((v,i)=>i%2&&v<=b[i-1]))throw new Error('The cells do not intersect. Move them closer or choose Union.');}
- first.name=name?.trim()||first.name;first.material=material===undefined?first.material:material===null?null:Number(material);delete first.builder;delete first.editorTranslation;first.transformSurfacesCloned=false;
+ first.name=name?.trim()||first.name;first.material=material===undefined?first.material:material===null?null:Number(material);delete first.builder;delete first.primitive;delete first.editorTranslation;first.transformSurfacesCloned=false;
  if(!(operation==='difference'&&keepTool))m.cells=m.cells.filter(c=>c!==other);
  m.selection={kind:'cell',id:first.id};m.focus={universe:first.universe,path:[]};syncUniverse(m,first.universe);return first.id;
 }
@@ -168,6 +201,9 @@ export function constructGeometry(m,operation,spec={}){
  ensureMaterials(m);const target=spec.target??m.focus.universe;let id;
  if(['cell','pin','lattice','universe','place'].includes(operation)&&(!m.cells.some(c=>c.universe===target)||target===(m.rootUniverse??0)))enableDomain(m,target,null);
  if(operation==='cell')id=createCell(m,{...spec,universe:target});
+ else if(operation==='edit')id=editCell(m,spec.id,spec);
+ else if(operation==='rotate')id=rotateCells(m,spec.ids||[],spec.angles||[0,0,0],spec.pivot||[0,0,0]);
+ else if(operation==='array')id=arrayCells(m,spec.ids||[],spec.counts,spec.spacing)[0];
  else if(operation==='combine')id=combineCells(m,spec);
  else if(operation==='move'){const c=m.cells.find(c=>c.id===spec.id);if(!c||c.background)throw new Error('Choose a movable cell.');if(!Array.isArray(spec.position)||spec.position.length!==3||!spec.position.every(Number.isFinite))throw new Error('Provide three finite position coordinates.');translateCell(m,c,spec.position);id=c.id;}
  else if(operation==='delete')deleteCells(m,spec.ids||[]);
