@@ -39,6 +39,7 @@ export function resizePlacements(m,id,bounds){
  const u=m.universes.find(u=>u.id===id);u.bounds=[...bounds];
  for(const c of m.cells.filter(c=>c.fill===id&&c.builderPlacement)){
   const p=c.translation||[0,0,0],boundary=surfaceIds(c.region).map(id=>m.surfaces.find(s=>s.id===id)?.boundaryType).find(t=>t&&t!=='transmission');c.region=box(m,u.name+' boundary',bounds.map((v,i)=>v+p[i>>1]),boundary);c.transformSurfacesCloned=false;
+  syncUniverse(m,c.universe);
  }
  syncDomains(m);
 }

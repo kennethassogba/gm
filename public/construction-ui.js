@@ -215,7 +215,7 @@ export function installConstruction(api){
   if(b.dataset.openBoolean){$('message-dialog').close();open('boolean',{operation:b.dataset.openBoolean});}
   if(b.dataset.editPin)editPin(Number(b.dataset.editPin));
   if(b.dataset.editLattice)editLattice(Number(b.dataset.editLattice));
-  if(b.dataset.regionSide!=null){if(selected().background)return;mutate(m=>{const [id]=scopeCells(m,[selected().id]),c=m.cells.find(c=>c.id===id),t=parseRegion(c.region);let node=t;for(const key of b.dataset.regionSide)node=node[key];node.negative=!node.negative;c.region=serializeRegion(t);c.builderPlacement=false;});}
+  if(b.dataset.regionSide!=null){if(selected().background)return;mutate(m=>{const [id]=scopeCells(m,[selected().id]),c=m.cells.find(c=>c.id===id),t=parseRegion(c.region);let node=t;for(const key of b.dataset.regionSide)node=node[key];node.negative=!node.negative;c.region=serializeRegion(t);c.builderPlacement=false;state.occurrence=null;state.scope='shared';});}
   if(b.dataset.diagnosticCells){state.multi=b.dataset.diagnosticCells.split(',').map(Number);state.model.selection={kind:'cell',id:state.multi[0]};$('message-dialog').close();renderEditor();}
  });
  document.addEventListener('keydown',e=>{
