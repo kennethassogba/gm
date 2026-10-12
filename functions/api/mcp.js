@@ -1,4 +1,5 @@
-import { STARTERS, BENCHMARKS, createModelForTemplate, focusModel, validateModel, exportGeometryXML, exportMaterialsXML, exportPython } from "../../public/model.js";
+import { STARTERS, BENCHMARKS, createEmptyModel, createModelForTemplate, focusModel, validateModel, exportGeometryXML, exportMaterialsXML, exportPython } from "../../public/model.js";
+import {constructGeometry,syncDomains} from '../../public/builder.js';
 
 const PROTOCOL_VERSION = "2025-11-25";
 const headers = {
@@ -9,6 +10,8 @@ const headers = {
   "cache-control": "no-store"
 };
 const tools = [
+  {name:"geometry.empty",description:"Create an empty geometry document.",inputSchema:{type:"object",properties:{name:{type:"string"}}}},
+  {name:"geometry.construct",description:"Build or edit canonical OpenMC geometry. Dimensions and positions are in cm. Cell spec: type cylinder/sphere/box/hexprism/region, name, material, radius/height/size/width/region, target, position. Pin spec: name, pitch, height, coolant, layers [{name,radius,material}]. Lattice spec: type rectangular/hexagonal, fill universe ID, pitch, pitchY, height, columns, rows, levels, rings, outerMaterial. Components use place:false to remain definitions. Combine spec: a,b cell IDs, operation union/intersection/difference, name, material, keepTool. Move: id, position. Delete/duplicate/group: ids, offset or name. Place: fill, target, position, replace cell ID.",inputSchema:{type:"object",required:["model","operation","spec"],properties:{model:{type:"object"},operation:{type:"string",enum:["cell","pin","lattice","universe","place","combine","move","delete","duplicate","group"]},spec:{type:"object"}}}},
   { name: "geometry.set_surface", description: "Edit surface coefficients in a model document.", inputSchema: {type:"object",required:["model","id","params"],properties:{model:{type:"object"},id:{type:"integer"},params:{type:"object",additionalProperties:{type:"number"}}}} },
   { name: "catalog.list", description: "List editable model examples and their metadata.", inputSchema: { type: "object", properties: {} } },
   { name: "geometry.template", description: "Create an editable model from the catalog.", inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", enum: STARTERS.filter((item) => item.kind !== "reference").map((item) => item.id) } } } },
@@ -33,13 +36,15 @@ function validateDocument(model) {
   if (JSON.stringify(model).length > 500_000) throw new Error("The model document exceeds the 500 KB request limit.");
 }
 function callTool(name, args) {
+  if(name==='geometry.empty')return createEmptyModel(args.name);
+  if(name==='geometry.construct'){validateDocument(args.model);const model=structuredClone(args.model);constructGeometry(model,args.operation,args.spec);const issues=validateModel(model);if(issues.length)throw new Error(issues.join(' '));return model;}
   if (name === "catalog.list") return { entries: STARTERS.map(({ id, name, family, kind, status, subtitle, source, version, href, simplification, note }) => ({ id, name, family, kind, status, subtitle, ...(source ? { source, version, href, simplification } : { note }) })), benchmarks: BENCHMARKS.map(({ id, name, source, version, href, simplification }) => ({ id, name, source, version, href, simplification })) };
   if (name === "geometry.template") {
     const model = createModelForTemplate(args.id);
     if (!model) throw new Error("Model not found.");
     return model;
   }
-  if(name === "geometry.set_surface"){validateDocument(args.model);const model=structuredClone(args.model),s=model.surfaces.find(s=>s.id===args.id);if(!s)throw new Error("Surface not found.");for(const [key,value] of Object.entries(args.params||{})){if(!(key in s.params)||!Number.isFinite(value)||(key==="r"&&value<=0))throw new Error("Invalid surface coefficient.");s.params[key]=value;}return model;}
+  if(name === "geometry.set_surface"){validateDocument(args.model);const model=structuredClone(args.model),s=model.surfaces.find(s=>s.id===args.id);if(!s)throw new Error("Surface not found.");for(const [key,value] of Object.entries(args.params||{})){if(!(key in s.params)||!Number.isFinite(value)||(key==="r"&&value<=0))throw new Error("Invalid surface coefficient.");s.params[key]=value;}syncDomains(model);return model;}
   if (name === "geometry.focus") {
     validateDocument(args.model);
     return focusModel(structuredClone(args.model), args);

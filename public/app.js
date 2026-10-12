@@ -1,6 +1,8 @@
 import {STARTERS,createEmptyModel,createModelForTemplate,addPrimitive,addComponent,translateCell,updateLatticePitch,nextId,cloneOccurrence,exportGeometryXML,exportMaterialsXML,exportPython,importGeometryXML,validateModel} from './model.js';
 import {parseRegion} from './csg.js';
 import {GeometryViewer} from './viewer.js';
+import {installConstruction} from './construction-ui.js';
+import {syncDomains,canContain,constructGeometry} from './builder.js';
 const $=id=>document.getElementById(id),plainLabel=v=>String(v??'').replaceAll('\u00b7','-'),esc=v=>plainLabel(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const state={model:null,page:'library',filter:'all',undo:[],redo:[],transaction:null,scope:'shared',occurrence:null,paint:null,selectedSurfaces:[],documents:[],viewer:null,renderPending:false,measure:null};
 const STORAGE='gm.documents.v2';
@@ -10,10 +12,10 @@ $('dismiss-notice').onclick=()=>$('notice').classList.remove('visible');
 function save(){if(!state.model)return;const i=state.documents.findIndex(x=>x.id===state.model.id);if(i<0)state.documents.unshift(structuredClone(state.model));else state.documents[i]=structuredClone(state.model);state.documents=state.documents.slice(0,15);try{localStorage.setItem(STORAGE,JSON.stringify(state.documents));$('saved').textContent='Saved';updateHistory();}catch{$('saved').textContent='Not saved';notice('Export a copy: this browser could not save the model.');}}
 function history(){state.undo.push(structuredClone(state.model));if(state.undo.length>60)state.undo.shift();state.redo=[];updateHistory();}
 function updateHistory(){$('undo').disabled=!(state.undo.length||(state.transaction&&JSON.stringify(state.transaction)!==JSON.stringify(state.model)));$('redo').disabled=!state.redo.length;}
-function redraw(fit=false){if(state.renderPending&&!fit)return;state.renderPending=true;requestAnimationFrame(()=>{state.renderPending=false;try{state.viewer?.update(state.model,{fit});}catch(error){notice(error.message+' Undo the last change or edit the region.');}});}
-function mutate(fn,{record=true,ui=true,fit=false}={}){if(record&&!state.transaction)history();fn(state.model);save();if(ui)renderEditor();else redraw(fit);updateHistory();window.dispatchEvent(new CustomEvent('gm:modelchange',{detail:{model:structuredClone(state.model)}}));}
-function undo(){finishTransaction();if(!state.undo.length)return;state.redo.push(structuredClone(state.model));state.model=state.undo.pop();state.occurrence=null;save();renderEditor();updateHistory();}
-function redo(){if(!state.redo.length)return;state.undo.push(structuredClone(state.model));state.model=state.redo.pop();state.occurrence=null;save();renderEditor();updateHistory();}
+function redraw(fit=false){if(state.renderPending&&!fit)return;state.renderPending=true;requestAnimationFrame(()=>{state.renderPending=false;try{state.model.selectedIds=state.multi||[];state.viewer?.update(state.model,{fit});}catch(error){notice(error.message+' Undo the last change or edit the region.');}});}
+function mutate(fn,{record=true,ui=true,fit=false}={}){const before=structuredClone(state.model);try{fn(state.model);syncDomains(state.model);}catch(error){state.model=before;notice(error.message);return false;}if(record&&!state.transaction){state.undo.push(before);if(state.undo.length>60)state.undo.shift();state.redo=[];}save();if(ui)renderEditor(fit);else redraw(fit);updateHistory();window.dispatchEvent(new CustomEvent('gm:modelchange',{detail:{model:structuredClone(state.model)}}));return true;}
+function undo(){finishTransaction();state.multi=[];if(!state.undo.length)return;state.redo.push(structuredClone(state.model));state.model=state.undo.pop();state.occurrence=null;save();renderEditor();updateHistory();}
+function redo(){if(!state.redo.length)return;state.multi=[];state.undo.push(structuredClone(state.model));state.model=state.redo.pop();state.occurrence=null;save();renderEditor();updateHistory();}
 function normalize(m){
  m.focus??={universe:0,path:[]};m.view??='3d';
  const l=m.lattices?.[0],span=l?.dimension?l.dimension[0]*l.pitch[0]/2:(m.dimensions?.pitch||4)/2,h=m.dimensions?.height||30;
@@ -27,8 +29,8 @@ function renderFraming({available,detail,span,cutaway}){
  $('view-3d-label').textContent=detail?'3D - '+span.toFixed(2)+' cm section':'3D';
  $('cut').setAttribute('aria-pressed',String(cutaway));
 }
-function openModel(m){state.model=normalize(structuredClone(m));state.undo=[];state.redo=[];state.occurrence=null;state.clonedOccurrence=null;state.scope='shared';state.page='editor';$('library').hidden=true;$('editor').hidden=false;$('editor').dataset.pane='view';$('export').disabled=false;$('validate').hidden=false;
- if(!state.viewer)state.viewer=new GeometryViewer($('view-host'),selectFromView,focusFromView,notice,renderFraming);
+function openModel(m){state.model=normalize(structuredClone(m));state.multi=[];state.paint=null;state.undo=[];state.redo=[];state.occurrence=null;state.clonedOccurrence=null;state.scope='shared';state.page='editor';$('library').hidden=true;$('editor').hidden=false;$('editor').dataset.pane='view';$('export').disabled=false;$('validate').hidden=false;
+ if(!state.viewer)state.viewer=new GeometryViewer($('view-host'),selectFromView,focusFromView,notice,renderFraming,delta=>{finishTransaction();mutate(m=>{applyScope(null);for(const id of state.multi?.length?state.multi:[m.selection.id]){const c=m.cells.find(c=>c.id===id);if(c&&!c.background)translateCell(m,c,(c.editorTranslation||c.translation||[0,0,0]).map((v,i)=>v+delta[i]));}});});
  save();renderEditor();redraw(true);document.title=plainLabel(state.model.name)+' - GM';$('main').focus({preventScroll:true});}
 function home(){state.page='library';$('library').hidden=false;$('editor').hidden=true;$('model-name').textContent='Models';$('validate').hidden=true;$('saved').textContent='';renderLibrary();document.title='GM - OpenMC geometry studio';$('library').querySelector('h1').focus({preventScroll:true});}
 function art(id){
@@ -46,8 +48,9 @@ function renderLibrary(){
  $('category-title').textContent={all:'All models',components:'Components',benchmarks:'Benchmarks',architectures:'Reactors'}[state.filter];
 }
 function selected(){const s=state.model?.selection;return s?state.model[{cell:'cells',surface:'surfaces',universe:'universes',lattice:'lattices',material:'materials'}[s.kind]]?.find(x=>x.id===s.id):null;}
-function select(kind,id,path=[]){
+function select(kind,id,path=[],additive=false){
  finishTransaction();state.clonedOccurrence=null;
+ if(additive&&kind==='cell'){const universe=state.model.cells.find(c=>c.id===Number(id))?.universe;const ids=(state.multi?.length?[...state.multi]:state.model.selection?.kind==='cell'?[state.model.selection.id]:[]).filter(id=>state.model.cells.find(c=>c.id===id)?.universe===universe);state.multi=ids.includes(Number(id))?ids.filter(x=>x!==Number(id)):[...ids,Number(id)];}else state.multi=[];
  const m=state.model,previousFocus=JSON.stringify(m.focus);m.selection={kind,id:Number(id)};
  const x=selected();if(!x)return;state.occurrence=null;
  let universe;
@@ -61,7 +64,7 @@ function select(kind,id,path=[]){
  if(universe!=null&&(kind==='universe'||universe!==m.focus.universe))m.focus={universe,path:kind==='universe'?structuredClone(path):[]};
  if(kind==='cell'&&m.focus.path?.length)state.occurrence={cell:x,path:structuredClone(m.focus.path)};
  else state.scope='shared';
- if(kind==='lattice')m.view='layout';else if(m.view==='layout')m.view='3d';
+ if(kind==='lattice'){m.view='layout';state.layoutLevel=0;state.paint=String(x.cells[0]?.universe??'');}else if(m.view==='layout')m.view='3d';
  if(m.isolated!=null)m.isolated=kind==='cell'&&x.fill==null?x.id:null;
  const focusChanged=previousFocus!==JSON.stringify(m.focus);
  if(focusChanged){const bounds=m.universes.find(u=>u.id===m.focus.universe)?.bounds,axis=m.view==='yz'?0:m.view==='xz'?1:2;if(bounds)m.section=(bounds[axis*2]+bounds[axis*2+1])/2;}
@@ -70,14 +73,15 @@ function select(kind,id,path=[]){
 function selectFromView(hit){
  if(state.paint&&hit.path?.length){const step=hit.path.at(-1);mutate(m=>{m.lattices.find(l=>l.id===step.lattice).cells[step.index].universe=Number(state.paint);});return;}
  if(state.measure){const p=hit.worldPoint||hit.point;if(!state.measure.start){state.measure.start=p;notice('Select the second point.');}else{notice('Distance: '+Math.hypot(...p.map((v,i)=>v-state.measure.start[i])).toFixed(4)+' cm');state.measure=null;}return;}
- state.clonedOccurrence=null;state.occurrence=hit;state.model.selection={kind:'cell',id:hit.cell.id};renderTree();renderProperties();redraw();
+ state.multi=hit.additive?[...new Set([...(state.multi?.length?state.multi:state.model.selection?.kind==='cell'?[state.model.selection.id]:[]),hit.cell.id])]:[];
+ state.clonedOccurrence=null;state.occurrence=hit;state.model.selection={kind:'cell',id:hit.cell.id};renderTree();renderProperties();construction.renderActions();redraw();
 }
 function focusFromView(hit){
  const path=hit.path||[];if(!path.length){state.model.focus={universe:hit.universe,path:[]};}
  else{const current=state.model.focus.path?.length||0,step=path[Math.min(current,path.length-1)];state.model.focus={universe:step.universe,path:path.slice(0,Math.min(current+1,path.length))};}
  state.model.selection={kind:'universe',id:state.model.focus.universe};state.occurrence=null;renderEditor();redraw(true);
 }
-function treeButton(kind,x,extra=''){const s=state.model.selection,active=s?.kind===kind&&s.id===x.id;return'<button class="tree-row '+extra+'" data-select="'+kind+'" data-id="'+x.id+'" aria-pressed="'+active+'"><span class="symbol" aria-hidden="true">'+({universe:'◇',cell:'◈',lattice:'▦',surface:'⌒',material:''}[kind])+'</span><span>'+esc(x.name)+'</span><span class="id">'+({universe:'U',cell:'C',lattice:'L',surface:'S',material:'M'}[kind])+x.id+'</span></button>';}
+function treeButton(kind,x,extra=''){const s=state.model.selection,active=s?.kind===kind&&s.id===x.id,multi=kind==='cell'&&state.multi?.includes(x.id);return'<button class="tree-row '+extra+(multi?' multi-selected':'')+'" data-select="'+kind+'" data-id="'+x.id+'" aria-pressed="'+(active||multi)+'" title="'+esc(x.name)+(kind==='cell'?' - Shift-click to select multiple':'')+'"><span class="symbol" aria-hidden="true">'+({universe:'◇',cell:multi?'✓':'◈',lattice:'▦',surface:'⌒',material:''}[kind])+'</span><span>'+esc(x.name)+'</span><span class="id">'+({universe:'U',cell:'C',lattice:'L',surface:'S',material:'M'}[kind])+x.id+'</span></button>';}
 function renderTree(){
  const m=state.model;
  $('tree').innerHTML=m.universes.map(u=>'<div class="tree-universe">'+treeButton('universe',u)+m.cells.filter(c=>c.universe===u.id).map(c=>treeButton('cell',c,'cell')).join('')+'</div>').join('')+m.lattices.map(l=>treeButton('lattice',l)).join('');
@@ -86,7 +90,7 @@ function renderTree(){
  $('counts').textContent=m.cells.length+' cells - '+m.universes.length+' universes';
 }
 function field(label,id,value,type='text'){return'<div class="field"><label for="'+id+'">'+label+'</label><input id="'+id+'" type="'+type+'" value="'+esc(value)+'"></div>';}
-function canFill(id,target,seen=new Set()){if(id===target)return false;if(seen.has(id))return true;seen.add(id);const l=state.model.lattices.find(l=>l.id===id);const next=l?l.cells.map(c=>c.universe):state.model.cells.filter(c=>c.universe===id&&c.fill!=null).map(c=>c.fill);return next.every(n=>canFill(n,target,seen));}
+function canFill(id,target){return canContain(state.model,id,target);}
 function options(list,value,empty){return(empty?'<option value="">'+empty+'</option>':'')+list.map(x=>'<option value="'+x.id+'"'+(x.id===value?' selected':'')+'>'+esc(x.name)+' - '+x.id+'</option>').join('');}
 function paramRow(s,key){
  const v=s.params[key],positive=key==='r',range=positive?Math.max(v*2,1):Math.max(Math.abs(v)*2,2),min=positive?.001:-range,label=key==='r'?'Radius':key;
@@ -102,16 +106,20 @@ function renderProperties(){
   html=scopeHTML()+html;
   html+='<div class="field"><label for="cell-fill">Fill</label><select id="cell-fill">'+options([...m.universes,...m.lattices].filter(u=>canFill(u.id,x.universe)),x.fill,'Material')+'</select></div>';
   if(x.fill==null)html+='<div class="field"><label for="cell-material">Material</label><select id="cell-material">'+options(m.materials,x.material,'Void')+'</select></div>';
-  html+='<div class="field"><label for="region">Region</label><textarea id="region" rows="2" spellcheck="false">'+esc(x.region)+'</textarea><div id="region-error" class="validation-error" role="status"></div></div>';
+  if(!x.background)html+='<div class="property-actions top-actions"><button data-action="move">Move</button><button data-action="duplicate">Duplicate</button><button data-action="delete" class="danger"'+(x.background?' disabled':'')+'>Delete</button></div>';
+  if(!x.background)html+='<div class="property-actions"><button data-action="boolean"'+(x.fill!=null?' disabled':'')+'>Combine...</button><button data-action="repeat">Repeat in lattice</button><button data-action="group">Make universe</button></div>';
+  html+='<details class="region-details" open><summary>Region</summary>'+construction.regionTree(x)+'<details><summary>OpenMC expression</summary><div class="field"><label for="region">Surface half-spaces</label><textarea id="region" rows="2" spellcheck="false"'+(x.background?' readonly':'')+'>'+esc(x.region)+'</textarea><div id="region-error" class="validation-error" role="status"></div></div></details></details>';
   html+='<div class="section-title">Surfaces</div>'+ss.map(s=>Object.keys(s.params).filter(k=>s.type==='sphere'||s.type==='z-cylinder'?k==='r':true).map(k=>paramRow(s,k)).join('')).join('');
-  if(x.fill!=null)html+='<button id="focus-fill" class="button">Open fill ↗</button>';
-  html+='<div class="property-actions"><button id="isolate" aria-pressed="'+(m.isolated===x.id)+'">Isolate</button><button id="hide">Hide</button><button id="duplicate">Duplicate</button><button id="delete" class="danger">Delete</button></div>';
-  html+='<details><summary>Transform</summary>'+['x','y','z'].map((a,i)=>'<div class="field"><label for="translate-'+i+'">'+a+' - cm</label><input id="translate-'+i+'" type="number" data-translate="'+i+'" step=".01" value="'+(x.editorTranslation?.[i]||x.translation?.[i]||0)+'"></div>').join('')+'</details>';
+  if(x.background)html+='<button class="button" data-build="boundary">Edit background and boundary</button>';
+  if(x.fill!=null)html+='<button id="focus-fill" class="button">Edit fill</button>';
+  html+='<div class="property-actions"><button id="isolate" aria-pressed="'+(m.isolated===x.id)+'">Isolate</button><button id="hide">Hide</button><button id="show-all">Show all</button></div>';
+  html+='<details><summary>Position - cm</summary>'+['x','y','z'].map((a,i)=>'<div class="field"><label for="translate-'+i+'">'+a+'</label><input id="translate-'+i+'" type="number" data-translate="'+i+'" step=".01" value="'+(x.editorTranslation?.[i]||x.translation?.[i]||0)+'"></div>').join('')+'</details>';
  }else if(s.kind==='surface'){
   html+=Object.keys(x.params).map(k=>paramRow(x,k)).join('');
   html+='<div class="field"><label for="boundary">Boundary</label><select id="boundary">'+['transmission','vacuum','reflective','periodic','white'].map(v=>'<option'+((x.boundaryType||'transmission')===v?' selected':'')+'>'+v+'</option>').join('')+'</select></div>';
-  html+='<div class="section-title">Combine surfaces</div><div class="field"><label for="boolean-other">Surface</label><select id="boolean-other">'+options(m.surfaces.filter(a=>a.id!==x.id),null)+'</select></div><div class="field"><label for="boolean-cell">Cell</label><select id="boolean-cell">'+options(m.cells.filter(c=>c.fill==null),null)+'</select></div><div class="property-actions"><button data-boolean="union">Union</button><button data-boolean="intersection">Intersect</button><button data-boolean="difference">Subtract</button></div>';
+  html+='<div class="section-title">Used by</div>'+m.cells.filter(c=>(c.region.match(/[+-]?\d+/g)||[]).some(t=>Math.abs(Number(t))===x.id)).map(c=>treeButton('cell',c)).join('');
  }else if(s.kind==='universe'){
+  html+='<div class="property-actions"><button data-build="pin">Add pin</button><button data-build="box">Add cell</button>'+(x.id!==0?'<button data-action="repeat">Repeat in lattice</button>':'')+(x.builder?.type==='pin'?'<button data-edit-pin="'+x.id+'">Edit layers</button>':'')+'</div>';
   html+='<div class="section-title">Cells</div>'+m.cells.filter(c=>c.universe===x.id).map(c=>treeButton('cell',c)).join('');
   html+='<div class="property-actions"><button id="show-all">Show all</button><button id="explode" aria-pressed="'+!!m.exploded+'">Explode</button><button id="measure">Measure</button></div>';
   if(x.id===0)html+='<details><summary>Model</summary><div class="field">'+field('Model name','document-name',m.name)+'</div><div class="hint">'+esc(m.metadata?.source||'GM')+(m.metadata?.sourceVersion?' - '+esc(m.metadata.sourceVersion):'')+'</div>'+(m.metadata?.sourceUrl?'<a class="hint" href="'+esc(m.metadata.sourceUrl)+'" target="_blank" rel="noopener">Source ↗</a>':'')+'<p class="hint">'+esc(m.metadata?.notes)+'</p></details>';
@@ -119,7 +127,7 @@ function renderProperties(){
   html+='<div class="section-title">'+(x.type==='hexagonal'?x.cells.length+' positions':x.dimension.join(' × '))+'</div>';
   html+=field('Pitch - cm','lattice-pitch',x.pitch[0],'number');
   html+='<div class="field"><label for="paint-universe">Fill universe</label><select id="paint-universe">'+options(m.universes.filter(u=>canFill(u.id,m.cells.find(c=>c.fill===x.id)?.universe??0)),state.paint?Number(state.paint):x.cells[0]?.universe)+'</select></div><label class="hint"><input id="paint-enabled" type="checkbox"'+(state.paint?' checked':'')+'> Paint positions</label>';
-  if(x.type==='rectangular'&&!x.dimension[2]||x.type==='hexagonal')html+='<button id="edit-layout" class="button">Edit layout</button>';
+  if(x.type==='rectangular'||x.type==='hexagonal')html+='<div class="property-actions"><button id="edit-layout">Edit layout</button><button data-edit-lattice="'+x.id+'">Dimensions</button></div>';
   else html+='<div class="field"><label for="position-index">Position</label><select id="position-index">'+x.cells.map((e,i)=>'<option value="'+i+'">'+(e.q!=null?e.q+', '+e.r:(e.x+1)+', '+(e.y+1)+', '+((e.z||0)+1))+'</option>').join('')+'</select></div><button id="replace-position" class="button">Replace position</button>';
   html+='<div class="property-actions"><button id="replace-all">Replace all</button>'+(x.type==='rectangular'&&!x.dimension[2]?'<button data-symmetry="x">Mirror X</button><button data-symmetry="y">Mirror Y</button><button data-symmetry="rotate">Rotate 90°</button>':'')+'<button id="focus-lattice">Focus lattice</button></div>';
  }else if(s.kind==='material'){
@@ -131,8 +139,10 @@ function renderProperties(){
 function universeColor(id){const m=state.model,c=m.cells.find(c=>c.universe===id&&c.material!=null),mat=m.materials.find(x=>x.id===c?.material);return mat?.color||'#8883ac';}
 function renderLayout(){
  const m=state.model,l=m.selection?.kind==='lattice'?selected():null;if(m.view!=='layout'||!l){$('layout-editor').hidden=true;return;}$('layout-editor').hidden=false;
- const columns=l.type==='rectangular'?l.dimension[0]:2*l.rings-1,rows=l.type==='rectangular'?l.dimension[1]:2*l.rings-1;
- $('layout-editor').innerHTML='<div class="layout-grid" style="--columns:'+columns+';--rows:'+rows+';grid-template-columns:repeat('+columns+',var(--tile));grid-template-rows:repeat('+rows+',var(--tile))">'+l.cells.filter(e=>!e.z).map((e,i)=>'<button data-lattice-index="'+i+'" aria-label="Position '+(e.q!=null?e.q+', '+e.r:(e.x+1)+', '+(e.y+1))+'; universe '+e.universe+'" title="'+esc(m.universes.find(u=>u.id===e.universe)?.name)+'" style="background:'+universeColor(e.universe)+';'+(e.q!=null?'grid-column:'+(e.q+l.rings)+';grid-row:'+(l.rings-e.r)+';transform:translateX('+e.r*15+'px);':'')+'"></button>').join('')+'</div>';
+ const columns=l.type==='rectangular'?l.dimension[0]:2*l.rings-1,rows=l.type==='rectangular'?l.dimension[1]:2*l.rings-1,level=state.layoutLevel||0,choices=m.universes.filter(u=>canFill(u.id,m.cells.find(c=>c.fill===l.id)?.universe??0));
+ const allowed=new Set(choices.map(u=>u.id));if(state.paint&&!allowed.has(Number(state.paint)))state.paint=null;
+ const palette='<div class="layout-palette"><div class="layout-modes"><button data-layout-mode="paint" aria-pressed="'+!!state.paint+'">Paint</button><button data-layout-mode="inspect" aria-pressed="'+!state.paint+'">Inspect</button></div>'+choices.map(u=>'<button data-paint-fill="'+u.id+'" aria-pressed="'+(Number(state.paint)===u.id)+'"><span class="swatch" style="background:'+universeColor(u.id)+'"></span>'+esc(u.name)+'</button>').join('')+(l.dimension?.[2]?'<label>Axial level <select id="layout-level">'+Array.from({length:l.dimension[2]},(_,i)=>'<option value="'+i+'"'+(i===level?' selected':'')+'>'+(i+1)+'</option>').join('')+'</select></label>':'')+'</div>';
+ $('layout-editor').innerHTML=palette+'<div class="layout-grid-wrap"><div class="layout-grid" style="--columns:'+columns+';--rows:'+rows+';grid-template-columns:repeat('+columns+',var(--tile));grid-template-rows:repeat('+rows+',var(--tile))">'+l.cells.map((e,i)=>({...e,index:i})).filter(e=>(e.z||0)===level).map(e=>{const name=m.universes.find(u=>u.id===e.universe)?.name||'Void';return '<button data-lattice-index="'+e.index+'" aria-label="Position '+(e.q!=null?e.q+', '+e.r:(e.x+1)+', '+(e.y+1))+'; '+esc(name)+'" title="'+esc(name)+' - '+(e.q!=null?e.q+', '+e.r:(e.x+1)+', '+(e.y+1))+'" style="background:'+universeColor(e.universe)+';'+(e.q!=null?'grid-column:'+(e.q+l.rings)+';grid-row:'+(l.rings-e.r)+';transform:translateX(calc('+e.r+' * var(--tile) / 2));':'')+'">'+e.universe+'</button>';}).join('')+'</div></div>';
 }
 function renderPath(){const m=state.model,path=m.focus?.path||[];let html='<button data-focus-root>Geometry</button>';if(!path.length&&m.focus.universe!==0)html+='<span>›</span><button data-focus-u="'+m.focus.universe+'">'+esc(m.universes.find(u=>u.id===m.focus.universe)?.name)+'</button>';path.forEach((step,i)=>{html+='<span>›</span><button data-focus-depth="'+i+'">'+esc(m.universes.find(u=>u.id===step.universe)?.name)+' <span>'+(step.index+1)+'</span></button>';});$('path').innerHTML=html;}
 function renderEditor(fit=false){
@@ -142,14 +152,14 @@ function renderEditor(fit=false){
  for(const [id,key]of [['cut','cutaway'],['transparent','transparent']])$(id).setAttribute('aria-pressed',String(!!m[key]));
  $('color').value=m.colorBy||'material';$('moderator').checked=!!m.showModerator;
  const b=m.universes.find(u=>u.id===m.focus.universe)?.bounds||[-1,1,-1,1,-1,1],v=m.section??0,axis=m.view==='yz'?0:m.view==='xz'?1:2;$('section').min=b[axis*2];$('section').max=b[axis*2+1];$('section').value=v;$('section-value').textContent=Number(v).toFixed(2)+' cm';
- redraw(fit);updateHistory();
+ construction.renderActions();redraw(fit);updateHistory();
 }
 function dialog(id){$(id).showModal();}
 function download(name,text,type='text/plain'){const url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function applyScope(surfaceId){
  if(state.scope!=='occurrence'||!state.occurrence?.path?.length||state.clonedOccurrence===state.model.selection.id)return surfaceId;
  const result=cloneOccurrence(state.model,state.occurrence.path,state.model.selection.id);
- state.model.selection.id=result.cellId;state.occurrence.path=result.path;state.occurrence.cell=state.model.cells.find(c=>c.id===result.cellId);
+ state.model.selection.id=result.cellId;state.multi=(state.multi||[]).map(id=>result.cellMap.get(id)||id);state.occurrence.path=result.path;state.occurrence.cell=state.model.cells.find(c=>c.id===result.cellId);
  if(state.model.focus.path.length){state.model.focus.path=result.path.slice(0,state.model.focus.path.length);state.model.focus.universe=state.model.focus.path.at(-1).universe;}
  document.querySelectorAll('[data-surface]').forEach(input=>{input.dataset.surface=result.surfaceMap.get(Number(input.dataset.surface))||input.dataset.surface;});renderTree();renderPath();
  state.clonedOccurrence=result.cellId;$('property-id').textContent='C'+result.cellId;return result.surfaceMap.get(surfaceId)||surfaceId;
@@ -177,36 +187,35 @@ document.addEventListener('click',e=>{
  if(b.dataset.filter){state.filter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderLibrary();}
  if(b.id==='clear-search'){$('search').value='';state.filter='all';renderLibrary();}
  if(b.hasAttribute('data-close'))b.closest('dialog').close();
- if(b.dataset.select)select(b.dataset.select,b.dataset.id);
+ if(b.dataset.select)select(b.dataset.select,b.dataset.id,[],e.shiftKey||e.ctrlKey||e.metaKey);
  if(b.dataset.pane){$('editor').dataset.pane=b.dataset.pane;document.querySelectorAll('[data-pane]').forEach(x=>{if(x.tagName==='BUTTON')x.setAttribute('aria-pressed',String(x===b));});state.viewer?.resize();}
  if(b.id==='edit-layout'){state.model.view='layout';renderEditor();}
+ if(b.dataset.layoutMode){state.paint=b.dataset.layoutMode==='paint'?String(selected().cells[0].universe):null;renderEditor();}
+ if(b.dataset.paintFill){state.paint=b.dataset.paintFill;renderEditor();}
  if(b.dataset.view){state.model.view=b.dataset.view;renderEditor();state.viewer?.resize();}
  if(b.dataset.add){
   $('add-dialog').close();if(b.dataset.add==='pin'||b.dataset.add==='lattice'){mutate(m=>addComponent(m,b.dataset.add==='pin'?'pin':'pwr17'),{fit:true});}
   else mutate(m=>addPrimitive(m,b.dataset.add),{fit:true});
  }
  if(b.dataset.export){try{const key=b.dataset.export;download({geometry:'geometry.xml',materials:'materials.xml',python:'model.py',project:'model.gm.json'}[key],key==='geometry'?exportGeometryXML(state.model):key==='materials'?exportMaterialsXML(state.model):key==='python'?exportPython(state.model):JSON.stringify(state.model,null,2));}catch(error){notice(error.message+' Check the geometry.');}}
- if(b.id==='property-add')dialog('add-dialog');
+ if(b.id==='property-add')construction.addMenu();
  const m=state.model;if(!m)return;const x=selected();if(!x&&!b.hasAttribute('data-focus-root')&&b.dataset.focusDepth==null&&b.dataset.focusU==null)return;
  if(b.id==='focus-universe'||b.id==='focus-fill'||b.id==='focus-lattice'){
-  let id=x.id;if(b.id==='focus-fill'){id=x.fill;const l=m.lattices.find(l=>l.id===id);if(l)id=m.cells.find(c=>c.fill===l.id)?.universe??0;}if(b.id==='focus-lattice')id=m.cells.find(c=>c.fill===x.id)?.universe??0;
-  select('universe',id);
+  let id=x.id;if(b.id==='focus-fill'){id=x.fill;const l=m.lattices.find(l=>l.id===id);if(l){select('lattice',l.id);return;}}if(b.id==='focus-lattice')id=m.cells.find(c=>c.fill===x.id)?.universe??0;
+  const fillCell=m.cells.find(c=>c.universe===id&&m.lattices.some(l=>l.id===c.fill));if(b.id==='focus-fill'&&fillCell)select('lattice',fillCell.fill);else select('universe',id);
  }
  if(b.dataset.focusU!=null)select('universe',Number(b.dataset.focusU));
  if(b.hasAttribute('data-focus-root'))select('universe',0);
  if(b.dataset.focusDepth!=null){const path=m.focus.path.slice(0,Number(b.dataset.focusDepth)+1);select('universe',path.at(-1).universe,path);}
- if(b.id==='delete')mutate(m=>{m.cells=m.cells.filter(c=>c.id!==x.id);m.selection=null;});
- if(b.id==='duplicate')mutate(m=>{const n=structuredClone(x);n.id=nextId(m.cells);n.name+=' copy';n.transformSurfacesCloned=false;m.cells.push(n);const tr=n.editorTranslation||n.translation||[0,0,0];translateCell(m,n,[tr[0]+1.5,tr[1],tr[2]]);m.selection={kind:'cell',id:n.id};});
  if(b.id==='isolate')mutate(m=>m.isolated=m.isolated===x.id?null:x.id,{record:false});
  if(b.id==='hide')mutate(m=>x.hidden=true,{record:false});
  if(b.id==='show-all')mutate(m=>{m.isolated=null;m.cells.forEach(c=>c.hidden=false);},{record:false});
  if(b.id==='explode')mutate(m=>m.exploded=!m.exploded,{record:false});
  if(b.id==='measure'){state.measure={};notice('Select two points in a section view.');}
- if(b.dataset.boolean){const other=Number($('boolean-other').value),target=m.cells.find(c=>c.id===Number($('boolean-cell').value));if(target)mutate(()=>target.region=b.dataset.boolean==='union'?'(-'+x.id+':-'+other+')':b.dataset.boolean==='intersection'?'-'+x.id+' -'+other:'-'+x.id+' '+other);}
  if(b.dataset.latticeIndex!=null){const i=Number(b.dataset.latticeIndex);if(state.paint)mutate(()=>x.cells[i].universe=Number(state.paint));else{const entry=x.cells[i];m.focus={universe:entry.universe,path:[{lattice:x.id,index:i,universe:entry.universe}]};m.selection={kind:'universe',id:entry.universe};m.view='3d';renderEditor();redraw(true);}}
  if(b.id==='replace-position')mutate(()=>x.cells[Number($('position-index').value)].universe=Number($('paint-universe').value));
  if(b.id==='replace-all'){const value=Number($('paint-universe').value);mutate(()=>x.cells.forEach(e=>e.universe=value));}
- if(b.dataset.symmetry){mutate(()=>{const n=x.dimension[0],old=structuredClone(x.cells);x.cells.forEach(e=>{const sx=b.dataset.symmetry==='x'?n-1-e.x:b.dataset.symmetry==='rotate'?e.y:e.x,sy=b.dataset.symmetry==='y'?n-1-e.y:b.dataset.symmetry==='rotate'?n-1-e.x:e.y;e.universe=old.find(v=>v.x===sx&&v.y===sy).universe;});});}
+ if(b.dataset.symmetry){mutate(()=>{const nx=x.dimension[0],ny=x.dimension[1],old=structuredClone(x.cells);if(b.dataset.symmetry==='rotate'&&nx!==ny)throw new Error('Rotate 90 degrees requires a square lattice. Use Mirror X or Y.');x.cells.forEach(e=>{const sx=b.dataset.symmetry==='x'?nx-1-e.x:b.dataset.symmetry==='rotate'?e.y:e.x,sy=b.dataset.symmetry==='y'?ny-1-e.y:b.dataset.symmetry==='rotate'?ny-1-e.x:e.y;e.universe=old.find(v=>v.x===sx&&v.y===sy&&(v.z||0)===(e.z||0)).universe;});});}
 });
 $('add-material').onclick=()=>mutate(m=>{const id=nextId(m.materials);m.materials.push({id,name:'Material '+id,color:'#9d9dad',density:1,densityUnits:'g/cm3',nuclides:[]});m.selection={kind:'material',id};});
 function beginTransaction(e){if(e.target.matches('[data-surface],#lattice-pitch,#density,#material-color,[data-translate],#region,#cell-material,#cell-fill,#item-name'))state.transaction??=structuredClone(state.model);}
@@ -216,13 +225,13 @@ document.addEventListener('focusout',finishTransaction);
 document.addEventListener('input',e=>{
  const t=e.target;if(t.closest('#command-dialog'))return;
  if(t.dataset.surface){const n=Number(t.value);if(!Number.isFinite(n)||(t.dataset.param==='r'&&n<=0))return;const old=Number(t.dataset.surface),id=applyScope(old),s=state.model.surfaces.find(s=>s.id===id);s.params[t.dataset.param]=n;
- t.closest('.numeric-row').querySelectorAll('input').forEach(i=>{i.dataset.surface=id;if(i!==t)i.value=n;});save();redraw();return;}
+ t.closest('.numeric-row').querySelectorAll('input').forEach(i=>{i.dataset.surface=id;if(i!==t)i.value=n;});syncDomains(state.model);save();redraw();return;}
  let x=selected();if(!x)return;if(state.model.selection.kind==='cell'&&(t.id==='region'||t.dataset.translate!=null)){applyScope(null);x=selected();}
- if(t.id==='region'){try{parseRegion(t.value);$('region-error').textContent='';}catch(error){$('region-error').textContent=error.message;return;}if(!state.transaction)history();x.region=t.value;save();redraw();}
+ if(t.id==='region'){try{parseRegion(t.value);$('region-error').textContent='';}catch(error){$('region-error').textContent=error.message;return;}if(!state.transaction)history();x.region=t.value;x.builderPlacement=false;syncDomains(state.model);save();redraw();}
  if(t.id==='material-color'){x.color=t.value;save();redraw();}
  if(t.id==='density'){if(Number(t.value)>0){x.density=Number(t.value);save();redraw();}}
- if(t.dataset.translate!=null){const tr=[...(x.editorTranslation||x.translation||[0,0,0])];tr[Number(t.dataset.translate)]=Number(t.value)||0;translateCell(state.model,x,tr);save();redraw();}
- if(t.id==='lattice-pitch'&&Number(t.value)>0){updateLatticePitch(state.model,x,Number(t.value));save();redraw();}
+ if(t.dataset.translate!=null){const tr=[...(x.editorTranslation||x.translation||[0,0,0])];tr[Number(t.dataset.translate)]=Number(t.value)||0;translateCell(state.model,x,tr);syncDomains(state.model);save();redraw();}
+ if(t.id==='lattice-pitch'&&Number(t.value)>0){updateLatticePitch(state.model,x,Number(t.value));syncDomains(state.model);save();redraw();}
 });
 document.addEventListener('change',e=>{
  const t=e.target;let x=selected();if(!x)return;if(state.model.selection.kind==='cell'&&['item-name','cell-material','cell-fill'].includes(t.id)){applyScope(null);x=selected();}
@@ -233,8 +242,9 @@ document.addEventListener('change',e=>{
  if(t.id==='cell-material')mutate(()=>x.material=t.value===''?null:Number(t.value));
  if(t.id==='cell-fill')mutate(()=>{x.fill=t.value===''?null:Number(t.value);if(x.fill!=null)x.material=null;});
  if(t.id==='boundary')mutate(()=>x.boundaryType=t.value);
- if(t.id==='paint-enabled'){state.paint=t.checked?$('paint-universe').value:null;}
- if(t.id==='paint-universe'&&state.paint)state.paint=t.value;
+ if(t.id==='paint-enabled'){state.paint=t.checked?$('paint-universe').value:null;renderLayout();}
+ if(t.id==='layout-level'){state.layoutLevel=Number(t.value);renderLayout();}
+ if(t.id==='paint-universe'&&state.paint){state.paint=t.value;renderLayout();}
  if(t.id==='nuclides'){try{const ns=t.value.trim().split('\n').filter(Boolean).map(row=>{const [name,val]=row.trim().split(/\s+/);if(!/^[A-Z][a-z]?\d+$/.test(name)||!(Number(val)>0))throw new Error('Use one nuclide and positive fraction per line, e.g. U235 0.03.');return{name,fraction:Number(val),basis:'ao'};});mutate(()=>x.nuclides=ns);}catch(error){$('nuclide-error').textContent=error.message;}}
 });
 function commands(){
@@ -242,7 +252,7 @@ function commands(){
  $('commands').innerHTML=list.filter(([name])=>name.toLowerCase().includes(q)).map(([name,key])=>'<button data-command="'+key+'">'+esc(name)+'</button>').join('');
 }
 $('command').onclick=()=>{commands();dialog('command-dialog');$('command-search').focus();};$('command-search').oninput=commands;
-document.addEventListener('click',e=>{const key=e.target.closest('[data-command]')?.dataset.command;if(!key)return;$('command-dialog').close();if(key.startsWith('model:'))openModel(createModelForTemplate(key.slice(6)));else if(key==='home')home();else if(key==='empty')openModel(createEmptyModel());else if(['cylinder','sphere','box'].includes(key)){if(!state.model)openModel(createEmptyModel());mutate(m=>addPrimitive(m,key));}else $(key).click();});
+document.addEventListener('click',e=>{const key=e.target.closest('[data-command]')?.dataset.command;if(!key)return;$('command-dialog').close();if(key.startsWith('model:'))openModel(createModelForTemplate(key.slice(6)));else if(key==='home')home();else if(key==='empty')openModel(createEmptyModel());else if(['cylinder','sphere','box'].includes(key)){if(!state.model)openModel(createEmptyModel());construction.open(key);}else $(key).click();});
 document.addEventListener('keydown',e=>{
  const editing=e.target.matches('input,textarea,select');
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('command').click();}
@@ -254,6 +264,7 @@ document.addEventListener('keydown',e=>{
 });
 window.gmStudio={
  getModel:()=>structuredClone(state.model),catalog:()=>STARTERS,
+ construct:(operation,spec)=>{if(!state.model)openModel(createEmptyModel());const draft=structuredClone(state.model);constructGeometry(draft,operation,spec);const issues=validateModel(draft);if(issues.length)throw new Error(issues.join(' '));mutate(m=>Object.assign(m,draft),{fit:true});return structuredClone(state.model);},
  open:id=>{openModel(id==='empty'?createEmptyModel():createModelForTemplate(id));return structuredClone(state.model);},
  setSurface:(id,params)=>{mutate(m=>{const s=m.surfaces.find(s=>s.id===Number(id));if(!s)throw new Error('Surface not found.');for(const [k,v]of Object.entries(params)){if(!Number.isFinite(v)||(k==='r'&&v<=0))throw new Error('Enter valid surface coefficients.');if(!(k in s.params))throw new Error('Unknown surface coefficient.');s.params[k]=v;}});return structuredClone(state.model);},
  add:type=>{if(!state.model)openModel(createEmptyModel());if(!['cylinder','sphere','box','pin','pwr17'].includes(type))throw new Error('Unknown geometry type.');mutate(m=>['pin','pwr17'].includes(type)?addComponent(m,type):addPrimitive(m,type));return structuredClone(state.model);},
@@ -263,6 +274,7 @@ window.gmStudio={
 };
 if(navigator.modelContext?.registerTool){
  for(const tool of [
+ {name:'geometry_construct',description:'Construct or edit canonical geometry locally. Operations: cell, pin, lattice, universe, place, combine, move, duplicate, delete, group. Dimensions in cm. Spec follows public/docs/construction.md.',inputSchema:{type:'object',properties:{operation:{type:'string',enum:['cell','pin','lattice','universe','place','combine','move','duplicate','delete','group']},spec:{type:'object'}},required:['operation','spec']},execute:async({operation,spec})=>JSON.stringify(window.gmStudio.construct(operation,spec))},
  {name:'geometry_catalog',description:'List editable model examples.',inputSchema:{type:'object',properties:{}},execute:async()=>JSON.stringify(STARTERS)},
  {name:'geometry_open',description:'Open an example or empty geometry in the current workspace.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id']},execute:async({id})=>JSON.stringify(window.gmStudio.open(id))},
  {name:'geometry_add',description:'Add a primitive or component.',inputSchema:{type:'object',properties:{type:{type:'string',enum:['cylinder','sphere','box','pin','pwr17']}},required:['type']},execute:async({type})=>JSON.stringify(window.gmStudio.add(type))},
@@ -274,4 +286,5 @@ if(navigator.modelContext?.registerTool){
  {name:'geometry_export',description:'Export the current OpenMC geometry or materials.',inputSchema:{type:'object',properties:{file:{type:'string',enum:['geometry.xml','materials.xml','model.py']}},required:['file']},execute:async({file})=>window.gmStudio.export(file)}
  ])navigator.modelContext.registerTool(tool);
 }
+const construction=installConstruction({state,mutate,selected,select,notice,openModel,save,renderEditor,finishTransaction,art});
 renderLibrary();

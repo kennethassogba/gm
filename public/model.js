@@ -1,4 +1,6 @@
 import {CORE_ROWS, GUIDE_POSITIONS} from './source-map.js';
+import {pythonModel} from './python-export.js';
+import {getRecipe,resolveSpec,applyRecipeStep} from './recipes.js';
 export const BENCHMARKS=[
 {id:'beavrs',name:'BEAVRS',source:'MIT CRPG',version:'2.0.2',href:'https://github.com/mit-crpg/BEAVRS',simplification:'Published map and pin dimensions. One representative assembly and fuel recipe. Axial loading and control rods omitted.'},
 {id:'c5g7-2d',name:'C5G7 - 2D',source:'OECD NEA / MIT CRPG',version:'NEA/NSC/DOC(2003)16',href:'https://github.com/mit-crpg/benchmarks/tree/master/c5g7/openmc',simplification:'3 × 3 core and 17 × 17 pin layouts. Illustrative continuous-energy recipes replace the seven-group benchmark materials.'},
@@ -13,14 +15,14 @@ export const nextId=a=>Math.max(0,...a.map(x=>x.id))+1;
 export function createEmptyModel(name='Untitled geometry'){
 return {schema:'gm-openmc-model/v1',id:crypto.randomUUID(),name,kind:'empty',units:'cm',metadata:{exportable:true,notes:''},surfaces:[],cells:[],materials:[],universes:[{id:0,name:'Geometry',bounds:[-2,2,-2,2,-2,2]}],lattices:[],selection:null,focus:{universe:0,path:[]},view:'3d',cutaway:false,exploded:false,colorBy:'material'};
 }
-function recipes(m){
+export function recipes(m){
 const data=[['UO₂','#d99b58',10.3,[['U235',.031],['U238',.969],['O16',2]]],['Helium','#d9dcd3',.0016,[['He4',1]]],['Zircaloy','#6caaa9',6.55,[['Zr90',1]]],['Water','#60788f',.74,[['H1',2],['O16',1]]],['Graphite','#888a91',1.7,[['C12',1]]],['MOX','#a191bf',10.4,[['U238',.94],['Pu239',.06],['O16',2]]],['Sodium','#9eac94',.85,[['Na23',1]]],['Steel','#8896a1',7.8,[['Fe56',1]]],['Heavy water','#7390a5',1.1,[['H2',2],['O16',1]]]];
 m.materials=data.map(([name,color,density,ns],i)=>({id:i+1,name,color,density,densityUnits:'g/cm3',nuclides:ns.map(([name,fraction])=>({name,fraction,basis:'ao'}))}));
 }
-function surf(m,name,type,params,boundaryType){const id=nextId(m.surfaces);m.surfaces.push({id,name,type,params,...(boundaryType?{boundaryType}:{})});return id;}
-function cell(m,universe,name,region,material,fill=null){const id=nextId(m.cells);m.cells.push({id,universe,name,region,material,fill});return id;}
-function uni(m,name,bounds){const id=Math.max(nextId(m.universes),nextId(m.lattices));m.universes.push({id,name,bounds});return id;}
-function box(m,name,b,boundary){return b.map((v,i)=>{const a='xyz'[Math.floor(i/2)],id=surf(m,name+' '+a+(i%2?'+':'-'),a+'-plane',{[a+'0']:v},boundary);return(i%2?'-':'')+id;}).join(' ');}
+export function surf(m,name,type,params,boundaryType){const id=nextId(m.surfaces);m.surfaces.push({id,name,type,params,...(boundaryType?{boundaryType}:{})});return id;}
+export function cell(m,universe,name,region,material,fill=null){const id=nextId(m.cells);m.cells.push({id,universe,name,region,material,fill});return id;}
+export function uni(m,name,bounds){const id=Math.max(nextId(m.universes),nextId(m.lattices));m.universes.push({id,name,bounds});return id;}
+export function box(m,name,b,boundary){return b.map((v,i)=>{const a='xyz'[Math.floor(i/2)],id=surf(m,name+' '+a+(i%2?'+':'-'),a+'-plane',{[a+'0']:v},boundary);return(i%2?'-':'')+id;}).join(' ');}
 function water(m,name='Moderator',mat=4,b=[-1,1,-1,1,-15,15]){const u=uni(m,name,b);cell(m,u,name,'',mat);return u;}
 function pin(m,name='Fuel pin',r=.41,p=1.26,h=30,fuel=1,coolant=4,single=false){
 const u=uni(m,name,[-p/2,p/2,-p/2,p/2,-h/2,h/2]),f=surf(m,name+' - fuel','z-cylinder',{x0:0,y0:0,r});cell(m,u,'Fuel','-'+f,fuel);
@@ -53,18 +55,11 @@ if(three){const l=m.lattices.find(x=>x.name==='Core');l.dimension=[3,3,10];l.pit
 return root(m,core);
 }
 export function createModelForTemplate(id){
-const t=STARTERS.find(x=>x.id===id);if(!t)throw new Error('Choose a model from the library.');const m=createEmptyModel(t.name);recipes(m);m.metadata={exportable:true,source:t.source||'GM',sourceUrl:t.href,sourceVersion:t.version||'1',notes:t.simplification||(t.family==='architectures'?'Generic geometry with illustrative material recipes.':'Parametric example with illustrative material recipes.')};let u;
-if(id==='pin')u=pin(m);
-if(id==='pwr17'||id==='bwr9')u=assembly(m,id==='bwr9'?'bwr':'pwr');
-if(id==='hex19'){const f=pin(m),w=water(m);u=hex(m,'Hexagonal lattice',3,1.26,f,w);}
-if(id==='beavrs'){const h=10,p=1.25984,f=pin(m,'Fuel pin',.39218,p,h),ss=m.surfaces.filter(x=>x.type==='z-cylinder');ss[1].params.r=.40005;ss[2].params.r=.4572;const w=water(m,'Water',4,[-10.75,10.75,-10.75,10.75,-h/2,h/2]),a=rect(m,'Assembly',17,p,f,w,h,(x,y)=>GUIDE_POSITIONS.has(y+','+x)?w:f);u=rect(m,'Core',19,21.50364,a,w,h,(x,y)=>/^[A-R]_{2,}\d{1,2}$/.test(CORE_ROWS[y][x])?a:w);}
-if(id.startsWith('c5g7'))return c5(m,id.endsWith('3d'));
-if(id==='takeda'){const outer=[-15,15,-15,15,-15,15],inner=[-10,10,-10,10,-10,10],core=box(m,'Fuel block',inner),channel=box(m,'Void channel',[-2,2,-2,2,-10,10]);m.universes[0].bounds=outer;cell(m,0,'Fuel block','('+core+') ~('+channel+')',1);cell(m,0,'Void channel',channel,null);cell(m,0,'Reflector',box(m,'Boundary',outer,'vacuum')+' ~('+core+')',5);m.selection={kind:'cell',id:1};return m;}
-if(id==='pwr-core'||id==='bwr-core'){const k=id==='bwr-core'?'bwr':'pwr',a=assembly(m,k,1,80),p=k==='bwr'?15:22,w=water(m,'Reflector',4,[-p/2,p/2,-p/2,p/2,-40,40]);u=rect(m,'Core',9,p,a,w,80,(x,y)=>Math.hypot(x-4,y-4)<4.5?a:w);}
-if(id==='candu'){const f=pin(m,'Fuel element',.61,1.5,50,1,9),w=water(m,'Heavy water',9,[-4,4,-4,4,-25,25]),a=hex(m,'37-element bundle',4,1.5,f,w,50);u=rect(m,'Pressure tubes',7,15,a,w,50);}
-if(id==='fast-hex'){const f=pin(m,'Fuel pin',.32,1.02,60,1,7),w=water(m,'Sodium',7,[-1,1,-1,1,-30,30]),a=hex(m,'Assembly',4,1.02,f,w,60);u=hex(m,'Core',4,8,a,w,60);}
-if(id==='htgr'){const f=pin(m,'Fuel compact',.65,2.2,40,1,5,true),g=water(m,'Graphite',5,[-10,10,-10,10,-20,20]),a=hex(m,'Graphite block',3,2.2,f,g,40);u=hex(m,'Core',4,12,a,g,40);}
-return root(m,u);
+ const t=STARTERS.find(x=>x.id===id);if(!t)throw new Error('Choose a model from the library.');
+ const m=createEmptyModel(t.name);recipes(m);m.templateId=id;
+ m.metadata={exportable:true,source:t.source||'GM',sourceUrl:t.href,sourceVersion:t.version||'1',notes:t.simplification||(t.family==='architectures'?'Generic geometry with illustrative material recipes.':'Parametric example with illustrative material recipes.')};
+ const refs={};for(const step of getRecipe(id))refs[step.key]=applyRecipeStep(m,step,resolveSpec(step.spec,refs));
+ m.kind='geometry';return m;
 }
 export function addPrimitive(m,type='cylinder'){
 if(!m.materials.length)recipes(m);const u=m.focus?.universe??0,n=nextId(m.cells);let region;
@@ -78,12 +73,12 @@ const cm=new Map(),sm=new Map(),um=new Map(),lm=new Map();
 function copy(id,depth){
 const old=m.universes.find(x=>x.id===id),u=uni(m,old.name+' - occurrence',structuredClone(old.bounds));um.set(id,u);
 for(const c of [...m.cells.filter(x=>x.universe===id)]){
-const n=structuredClone(c);n.id=nextId(m.cells);n.universe=u;cm.set(c.id,n.id);
+const n=structuredClone(c);n.id=nextId(m.cells);n.universe=u;cm.set(c.id,n.id);m.cells.push(n);
 n.region=String(c.region).replace(/[+-]?\d+/g,t=>{const old=Math.abs(Number(t));if(!sm.has(old)){const s=structuredClone(m.surfaces.find(x=>x.id===old));s.id=nextId(m.surfaces);m.surfaces.push(s);sm.set(old,s.id);}return(t.startsWith('-')?'-':'')+sm.get(old);});
 if(n.fill!=null){const l=m.lattices.find(x=>x.id===n.fill);if(l){const a=structuredClone(l);a.id=Math.max(nextId(m.lattices),nextId(m.universes));m.lattices.push(a);lm.set(l.id,a.id);n.fill=a.id;const step=path[depth];if(step?.lattice===l.id)a.cells[step.index].universe=copy(a.cells[step.index].universe,depth+1);}else n.fill=copy(n.fill,depth);}
-m.cells.push(n);}return u;}
+}const target=m.universes.find(x=>x.id===u);if(old.builder)target.builder={...structuredClone(old.builder),...(old.builder.lattice?{lattice:lm.get(old.builder.lattice)||old.builder.lattice}:{})};if(old.domain)target.domain={...structuredClone(old.domain),cell:cm.get(old.domain.cell),surfaceIds:old.domain.surfaceIds.map(id=>sm.get(id))};return u;}
 const first=path[0];if(!first)throw new Error('Select a lattice occurrence first.');const l=m.lattices.find(x=>x.id===first.lattice);l.cells[first.index].universe=copy(l.cells[first.index].universe,1);
-return{cellId:cm.get(cellId)||cellId,surfaceMap:sm,path:path.map((s,i)=>({...s,lattice:i?lm.get(s.lattice)||s.lattice:s.lattice,universe:um.get(s.universe)||s.universe}))};
+return{cellId:cm.get(cellId)||cellId,cellMap:cm,surfaceMap:sm,path:path.map((s,i)=>({...s,lattice:i?lm.get(s.lattice)||s.lattice:s.lattice,universe:um.get(s.universe)||s.universe}))};
 }
 export function focusModel(m,{level,x,y}){if(level==='core'){m.focus={universe:0,path:[]};return m;}let u=m.focus.universe,l;for(let i=0;i<8&&!l;i++){const c=m.cells.find(c=>c.universe===u&&c.fill!=null);l=m.lattices.find(l=>l.id===c?.fill);u=c?.fill;}const e=l?.cells.find(e=>e.x===Number(x)&&e.y===Number(y));if(!e)throw new Error('Choose a position within the lattice.');m.focus={universe:e.universe,path:[...(m.focus.path||[]),{lattice:l.id,index:l.cells.indexOf(e),universe:e.universe}]};return m;}
 export function validateModel(m){
@@ -96,8 +91,9 @@ const visit=(id,path)=>{if(path.has(id)){errors.push('Cyclic universe or lattice
 }
 const xe=v=>String(v??'').replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;');
 export function exportGeometryXML(m){
+m=activeGeometry(m);
 const lines=['<?xml version="1.0" encoding="utf-8"?>','<geometry>'];
-for(const s of m.surfaces){const p=s.params,c=s.type==='sphere'?[p.x0,p.y0,p.z0,p.r]:s.type==='z-cylinder'?[p.x0,p.y0,p.r]:s.type==='plane'?[p.a,p.b,p.c,p.d]:[Object.values(p)[0]];lines.push('  <surface id="'+s.id+'" name="'+xe(s.name)+'" type="'+s.type+'" coeffs="'+c.map(x=>Number(x)||0).join(' ')+'"'+(s.boundaryType?' boundary="'+s.boundaryType+'"':'')+' />');}
+for(const s of m.surfaces){const p=s.params,c=s.type==='sphere'?[p.x0,p.y0,p.z0,p.r]:s.type.endsWith('-cylinder')?[...['x0','y0','z0'].filter(k=>k[0]!==s.type[0]).map(k=>p[k]),p.r]:s.type==='plane'?[p.a,p.b,p.c,p.d]:[Object.values(p)[0]];lines.push('  <surface id="'+s.id+'" name="'+xe(s.name)+'" type="'+s.type+'" coeffs="'+c.map(x=>Number(x)||0).join(' ')+'"'+(s.boundaryType?' boundary="'+s.boundaryType+'"':'')+' />');}
 for(const c of m.cells)lines.push('  <cell id="'+c.id+'" name="'+xe(c.name)+'" universe="'+c.universe+'"'+(c.fill!=null?' fill="'+c.fill+'"':' material="'+(c.material??'void')+'"')+(c.region?' region="'+xe(c.region.replaceAll(':','|'))+'"':'')+(c.translation?' translation="'+c.translation.join(' ')+'"':'')+' />');
 for(const l of m.lattices){
 if(l.type==='rectangular')lines.push('  <lattice id="'+l.id+'" name="'+xe(l.name)+'" dimension="'+l.dimension.join(' ')+'" outer="'+l.outer+'">','    <lower_left>'+l.lowerLeft.join(' ')+'</lower_left>','    <pitch>'+l.pitch.join(' ')+'</pitch>','    <universes>'+l.cells.map(e=>e.universe).join(' ')+'</universes>','  </lattice>');
@@ -105,12 +101,21 @@ else{const y=l.orientation==='y',rows=[];for(let r=(y?2:1)*(l.rings-1);r>=(y?-2:
 return[...lines,'</geometry>',''].join('\n');
 }
 export function exportMaterialsXML(m){
+m=activeGeometry(m);
 const lines=['<?xml version="1.0" encoding="utf-8"?>','<materials>'];for(const x of m.materials){lines.push('  <material id="'+x.id+'" name="'+xe(x.name)+'">','    <density value="'+Number(x.density)+'" units="'+xe(x.densityUnits||'g/cm3')+'" />');for(const n of x.nuclides||[])lines.push('    <nuclide name="'+xe(n.name)+'" '+(n.basis==='wo'?'wo':'ao')+'="'+Number(n.fraction)+'" />');for(const e of x.elements||[])lines.push('    <element name="'+xe(e.name)+'" '+(e.basis==='wo'?'wo':'ao')+'="'+Number(e.fraction)+'" />');lines.push('  </material>');}return[...lines,'</materials>',''].join('\n');
 }
-export function exportPython(m){return'# '+m.name+'\nimport openmc\n\nmaterials = openmc.Materials.from_xml("materials.xml")\ngeometry = openmc.Geometry.from_xml("geometry.xml", materials=materials)\n\n# Add settings and tallies for your calculation.\nmodel = openmc.Model(geometry=geometry, materials=materials)\nmodel.export_to_xml()\n';}
+
+export function activeGeometry(m){
+ const seen=new Set(),cells=[],lattices=[];
+ function visit(id){if(seen.has(id))return;seen.add(id);const lattice=m.lattices.find(l=>l.id===id);if(lattice){lattices.push(lattice);[lattice.outer,...lattice.cells.map(e=>e.universe)].filter(x=>x!=null).forEach(visit);return;}for(const c of m.cells.filter(c=>c.universe===id)){cells.push(c);if(c.fill!=null)visit(Number(c.fill));}}
+ visit(m.rootUniverse??(m.universes.some(u=>u.id===0)?0:m.universes[0]?.id));
+ const refs=new Set(cells.flatMap(c=>(c.region.match(/[+-]?\d+/g)||[]).map(t=>Math.abs(Number(t))))),materials=new Set(cells.filter(c=>c.fill==null&&c.material!=null).map(c=>c.material));
+ return {...m,cells,lattices,universes:m.universes.filter(u=>seen.has(u.id)),surfaces:m.surfaces.filter(s=>refs.has(s.id)),materials:m.materials.filter(x=>materials.has(x.id))};
+}
+export function exportPython(m){return pythonModel(m);}
 export function importGeometryXML(text){
  const doc=new DOMParser().parseFromString(text,'application/xml');if(doc.querySelector('parsererror')||!doc.querySelector('geometry'))throw new Error('Open a valid geometry.xml file.');const m=createEmptyModel('Imported geometry'),get=(e,k)=>e.getAttribute(k)??e.querySelector(k)?.textContent?.trim(),nums=(e,k)=>(get(e,k)||'').split(/\s+/).filter(Boolean).map(Number);
- for(const s of doc.querySelectorAll('surface')){const type=get(s,'type');if(!['sphere','z-cylinder','plane','x-plane','y-plane','z-plane'].includes(type))throw new Error('Unsupported surface: '+type);const c=nums(s,'coeffs'),keys=type==='sphere'?['x0','y0','z0','r']:type==='z-cylinder'?['x0','y0','r']:type==='plane'?['a','b','c','d']:[type[0]+'0'];m.surfaces.push({id:Number(get(s,'id')),name:get(s,'name')||type,type,params:Object.fromEntries(keys.map((k,i)=>[k,c[i]])),boundaryType:get(s,'boundary')||undefined});}
+ for(const s of doc.querySelectorAll('surface')){const type=get(s,'type');if(!['sphere','x-cylinder','y-cylinder','z-cylinder','plane','x-plane','y-plane','z-plane'].includes(type))throw new Error('Unsupported surface: '+type);const c=nums(s,'coeffs'),keys=type==='sphere'?['x0','y0','z0','r']:type.endsWith('-cylinder')?[...['x0','y0','z0'].filter(k=>k[0]!==type[0]),'r']:type==='plane'?['a','b','c','d']:[type[0]+'0'];m.surfaces.push({id:Number(get(s,'id')),name:get(s,'name')||type,type,params:Object.fromEntries(keys.map((k,i)=>[k,c[i]])),boundaryType:get(s,'boundary')||undefined});}
  for(const c of doc.querySelectorAll('cell')){if(get(c,'rotation'))throw new Error('Rotated universes are not supported.');const material=get(c,'material');if(material?.trim().split(/\s+/).length>1)throw new Error('Distributed materials are not supported.');m.cells.push({id:Number(get(c,'id')),name:get(c,'name')||'Cell',universe:Number(get(c,'universe')||0),material:get(c,'fill')!=null||material==='void'?null:Number(material),fill:get(c,'fill')!=null?Number(get(c,'fill')):null,region:get(c,'region')||'',...(get(c,'translation')?{translation:nums(c,'translation')}: {})});}
  const ids=[...new Set(m.cells.map(c=>c.universe))];m.universes=ids.map(id=>({id,name:'Universe '+id,bounds:[-10,10,-10,10,-10,10]}));
  for(const l of doc.querySelectorAll('lattice')){const values=nums(l,'universes'),d=nums(l,'dimension');m.lattices.push({id:Number(get(l,'id')),name:get(l,'name')||'Lattice',type:'rectangular',dimension:d,pitch:nums(l,'pitch'),lowerLeft:nums(l,'lower_left'),outer:Number(get(l,'outer')),cells:values.map((u,i)=>({x:i%d[0],y:Math.floor(i/d[0])%d[1],z:Math.floor(i/(d[0]*d[1])),universe:u}))});}
