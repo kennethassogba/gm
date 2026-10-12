@@ -32,7 +32,7 @@ export function installConstruction(api){
   if(type==='pin')return {name:'Fuel pin',pitch:1.26,height:30,coolant:4,layers:[{name:'Fuel',radius:.41,material:1},{name:'Gap',radius:.418,material:2},{name:'Cladding',radius:.475,material:3}]};
   if(type==='lattice'){
    const fill=x?.fill!=null&&m.universes.some(u=>u.id===x.fill)?x.fill:m.selection?.kind==='universe'&&x.id!==0?x.id:m.universes.find(u=>u.id!==0)?.id;
-   const bounds=m.universes.find(u=>u.id===fill)?.bounds||[-.63,.63,-.63,.63,-15,15];return {name:'Assembly',type:'rectangular',fill,columns:17,rows:17,levels:1,rings:3,pitch:bounds[1]-bounds[0],pitchY:bounds[3]-bounds[2],height:bounds[5]-bounds[4],outerMaterial:4,pattern:'all'};
+   const source=m.universes.find(u=>u.id===fill),bounds=source?.bounds||[-.63,.63,-.63,.63,-15,15],core=source?.builder?.type==='lattice';return {name:core?'Core':'Assembly',type:'rectangular',fill,columns:core?3:17,rows:core?3:17,levels:1,rings:3,pitch:bounds[1]-bounds[0],pitchY:bounds[3]-bounds[2],height:bounds[5]-bounds[4],outerMaterial:4,pattern:'all'};
   }
   if(type==='boolean'){const cells=m.cells.filter(c=>c.universe===(x?.universe??m.focus.universe)&&!c.background&&c.fill==null),ids=selectionIds();return {a:ids[0]??cells[0]?.id,b:ids[1]??cells.find(c=>c.id!==(ids[0]??cells[0]?.id))?.id,operation:'difference',name:x?.name||'Combined cell',material:x?x.material:cells[0]?.material,keepTool:false};}
   if(type==='place')return {name:'',fill:m.universes.find(u=>u.id!==m.focus.universe)?.id,target:m.focus.universe,position:[0,0,0]};
