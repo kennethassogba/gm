@@ -10,8 +10,8 @@ function tubeGeometry(outer,inner,height,cutaway,segments){
  return new THREE.ExtrudeGeometry(shape,{depth:height,bevelEnabled:false,steps:1,curveSegments:Math.max(8,segments)});
 }
 export class GeometryViewer {
- constructor(host,onSelect,onFocus,onError){
-  this.host=host;this.onSelect=onSelect;this.onFocus=onFocus;this.onError=onError;this.revision=0;this.meshes=[];this.jobs=new Map();this.cache=new Map();this.sliceMaps=new Map();
+ constructor(host,onSelect,onFocus,onError,onFraming=()=>{}){
+  this.host=host;this.onSelect=onSelect;this.onFocus=onFocus;this.onError=onError;this.onFraming=onFraming;this.revision=0;this.meshes=[];this.jobs=new Map();this.cache=new Map();this.sliceMaps=new Map();
   this.canvas=host.querySelector('#view-3d');this.scene=new THREE.Scene();this.scene.background=new THREE.Color('#17191e');
   try{this.renderer=new THREE.WebGLRenderer({canvas:this.canvas,antialias:true,preserveDrawingBuffer:true});this.renderer.setPixelRatio(Math.min(devicePixelRatio,2));this.renderer.localClippingEnabled=true;this.renderer.outputColorSpace=THREE.SRGBColorSpace;}
   catch(error){onError('3D unavailable. Enable hardware acceleration or use the section views.');}
@@ -32,30 +32,54 @@ export class GeometryViewer {
   this.model=model;this.compiled=compileModel(model);this.revision++;this.items=collectInstances(this.compiled);
   this.onlyBackground=this.items.every(item=>item.shape.type==='moderator'||(!item.cell.region&&item.shape.type==='box'));
   const s=model.selection;this.selectedCells=new Set(model.cells.filter(c=>s?.kind==='cell'?c.id===s.id:s?.kind==='material'?c.material===s.id:s?.kind==='surface'?(c.region.match(/[+-]?\d+/g)||[]).some(t=>Math.abs(Number(t))===s.id):false).map(c=>c.id));
-  this.rebuild();if(options.fit||this.lastFocus!==JSON.stringify(model.focus)){this.fit();this.lastFocus=JSON.stringify(model.focus);}this.resize();
+  const focus=JSON.stringify([model.id,model.focus]),focusChanged=this.lastFocus!==focus,previousDetail=JSON.stringify(this.detailBounds);
+  const wasPin=!!this.pinBounds;this.pinBounds=this.findPinBounds();if(focusChanged||this.pinBounds&&!wasPin){this.detail=!!this.pinBounds;this.detailCutaway=true;}else if(!this.pinBounds)this.detail=false;
+  this.updateFraming();this.rebuild();if(options.fit||focusChanged||previousDetail!==JSON.stringify(this.detailBounds))this.fit(!focusChanged&&!options.fit);this.lastFocus=focus;this.resize();
   this.canvas.dataset.revision=this.revision;this.canvas.dataset.instances=this.items.length;
  }
+ findPinBounds(){
+  const solids=this.items.filter(item=>item.shape.type!=='moderator'&&(item.cell.region||item.shape.type!=='box'));
+  if(!solids.length||solids.some(item=>item.shape.type!=='tube'))return null;
+  const first=solids[0],cx=first.position[0]+first.shape.center[0],cy=first.position[1]+first.shape.center[1];
+  if(solids.some(item=>Math.abs(item.position[0]+item.shape.center[0]-cx)>1e-6||Math.abs(item.position[1]+item.shape.center[1]-cy)>1e-6))return null;
+  const radius=Math.max(...solids.map(item=>item.shape.outer)),bottom=Math.min(...solids.map(item=>item.bounds[4]+item.position[2])),top=Math.max(...solids.map(item=>item.bounds[5]+item.position[2]));
+  return top-bottom>radius*24?[cx-radius,cx+radius,cy-radius,cy+radius,bottom,top]:null;
+ }
+ updateFraming(){
+  this.detailBounds=null;
+  if(this.detail&&this.pinBounds){
+   const b=this.pinBounds,span=(b[1]-b[0])*2.2,z=this.model.view==='3d'||this.model.view==='xy'?this.model.section:null;
+   const center=Math.max(b[4]+span/2,Math.min(b[5]-span/2,z??(b[4]+b[5])/2));this.detailBounds=[...b.slice(0,4),center-span/2,center+span/2];
+  }
+  this.canvas.dataset.framing=this.detailBounds?'detail':'full';
+  this.onFraming({available:!!this.pinBounds,detail:!!this.detailBounds,span:this.detailBounds?this.detailBounds[5]-this.detailBounds[4]:null,cutaway:this.detailBounds?this.detailCutaway:!!this.model.cutaway});
+ }
+ toggleDetail(){if(!this.pinBounds)return;this.detail=!this.detail;this.updateFraming();this.rebuild();this.fit();}
+ toggleDetailCutaway(){this.detailCutaway=!this.detailCutaway;this.updateFraming();this.rebuild();this.render3D();}
  clear(){
   for(const o of this.group.children){o.geometry?.dispose();if(Array.isArray(o.material))o.material.forEach(x=>x.dispose());else o.material?.dispose();o.dispose?.();}
   this.group.clear();this.meshes=[];
  }
  rebuild(){
-  this.clear();const batches=new Map();const m=this.model;
+  this.clear();const batches=new Map();const m=this.model,cutaway=this.detailBounds?this.detailCutaway:m.cutaway;
   for(const item of this.items){
    if(item.cell.hidden||(m.isolated!=null&&item.cell.id!==m.isolated))continue;
-   const sh=item.shape,b=item.bounds,mat=m.materials.find(x=>x.id===item.cell.material),background=!this.onlyBackground&&(sh.type==='moderator'||(!item.cell.region&&sh.type==='box'));
+   const sh=item.shape,b=[...item.bounds],mat=m.materials.find(x=>x.id===item.cell.material),background=!this.onlyBackground&&(sh.type==='moderator'||(!item.cell.region&&sh.type==='box'));
+   // Crop display meshes only. Canonical instances and OpenMC dimensions stay intact.
+   if(this.detailBounds){b[4]=Math.max(b[4],this.detailBounds[4]-item.position[2]);b[5]=Math.min(b[5],this.detailBounds[5]-item.position[2]);if(b[5]<=b[4])continue;}
    if(background&&!m.showModerator&&!this.selectedCells.has(item.cell.id))continue;
    const color=m.colorBy==='universe'?new THREE.Color().setHSL((item.universe*.137)%1,.3,.57).getStyle():mat?.color||'#9b9da2';
-   const key=JSON.stringify([item.cell.id,sh,b,color,m.cutaway,background]);
-   if(!batches.has(key))batches.set(key,{items:[],item,color,background});batches.get(key).items.push(item);
+   const key=JSON.stringify([item.cell.id,sh,b,color,cutaway,background]);
+   if(!batches.has(key))batches.set(key,{items:[],item,bounds:b,color,background});batches.get(key).items.push(item);
   }
   const segments=this.items.length>5000?12:40;
   for(const batch of batches.values()){
-   const {item,color,background,items}=batch,b=item.bounds,sh=item.shape,dx=b[1]-b[0],dy=b[3]-b[2],dz=b[5]-b[4];
+   const {item,color,background,items,bounds:b}=batch,sh=item.shape,dx=b[1]-b[0],dy=b[3]-b[2],dz=b[5]-b[4];
    const material=new THREE.MeshStandardMaterial({color,roughness:.65,metalness:sh.inner?.2:0,side:THREE.DoubleSide,transparent:!!(background||m.transparent),opacity:background?.08:m.transparent?.42:1,depthWrite:!background&&!m.transparent});
-   if(m.cutaway&&this.items.length>5000)material.clippingPlanes=[new THREE.Plane(new THREE.Vector3(-1,0,0),0)];
+   if(this.selectedCells.has(item.cell.id)){material.emissive.copy(material.color);material.emissiveIntensity=.18;}
+   if(cutaway&&this.items.length>5000)material.clippingPlanes=[new THREE.Plane(new THREE.Vector3(-1,0,0),0)];
    let geometry,center=[(b[0]+b[1])/2,(b[2]+b[3])/2,(b[4]+b[5])/2];
-   if(sh.type==='tube'){geometry=tubeGeometry(sh.outer,sh.inner,dz,m.cutaway&&this.items.length<5000,segments);center=[sh.center[0],sh.center[1],b[4]];}
+   if(sh.type==='tube'){geometry=tubeGeometry(sh.outer,sh.inner,dz,cutaway&&this.items.length<5000,segments);center=[sh.center[0],sh.center[1],b[4]];}
    else if(sh.type==='sphere'){geometry=new THREE.SphereGeometry(sh.radius,32,20);center=sh.center;}
    else if(sh.type==='csg'||sh.type==='moderator'){
     const key=JSON.stringify([item.cell.region,this.model.surfaces,b]);
@@ -70,17 +94,23 @@ export class GeometryViewer {
   const mesh=new THREE.InstancedMesh(geometry,material,items.length),matrix=new THREE.Matrix4();
   items.forEach((item,i)=>{const explode=this.model.exploded&&this.items.length<1000?item.cell.id*.12:0;matrix.makeTranslation(item.position[0]+center[0]+explode,item.position[1]+center[1],item.position[2]+center[2]);mesh.setMatrixAt(i,matrix);if(this.selectedCells.has(item.cell.id))mesh.setColorAt(i,new THREE.Color(material.color).lerp(new THREE.Color('#ffffff'),.22));});
   mesh.instanceMatrix.needsUpdate=true;mesh.userData.items=items;this.group.add(mesh);this.meshes.push(mesh);
+  if(this.detailBounds&&this.selectedCells.has(items[0].cell.id)){
+   const edges=new THREE.EdgesGeometry(geometry,20);for(const item of items){const outline=new THREE.LineSegments(edges,new THREE.LineBasicMaterial({color:'#c2c6ff'})),explode=this.model.exploded?item.cell.id*.12:0;outline.position.set(item.position[0]+center[0]+explode,item.position[1]+center[1],item.position[2]+center[2]);this.group.add(outline);}
+  }
  }
  resize(){
   if(!this.renderer)return;const r=this.canvas.getBoundingClientRect();if(r.width<1||r.height<1){this.drawSlices();return;}
-  this.renderer.setSize(r.width,r.height,false);this.camera.aspect=r.width/r.height;this.camera.updateProjectionMatrix();this.render3D();this.drawSlices();
+  const size=r.width+':'+r.height,sizeChanged=this.viewSize!==size;this.viewSize=size;
+  this.renderer.setSize(r.width,r.height,false);this.camera.aspect=r.width/r.height;this.camera.updateProjectionMatrix();if(sizeChanged)this.fit(true);this.render3D();this.drawSlices();
  }
- fit(){
-  if(!this.model)return;const b=this.compiled.universes.get(this.model.focus?.universe??0)?.bounds||[-2,2,-2,2,-2,2];
+ fit(preserveAngle=false){
+  if(!this.model)return;const b=this.detailBounds||this.compiled.universes.get(this.model.focus?.universe??0)?.bounds||[-2,2,-2,2,-2,2];
   const center=new THREE.Vector3((b[0]+b[1])/2,(b[2]+b[3])/2,(b[4]+b[5])/2),span=Math.max(b[1]-b[0],b[3]-b[2],b[5]-b[4]);
-  const r=this.canvas.getBoundingClientRect(),hr=this.host.getBoundingClientRect(),aspect=(r.width||hr.width||1)/Math.max(r.height||hr.height,1),distance=span*2.65/Math.min(1,aspect);
-  this.camera.position.copy(center).add(new THREE.Vector3(.85,-1.25,.85).normalize().multiplyScalar(distance));
-  this.camera.near=Math.max(.0001,span/10000);this.camera.far=span*1000;this.camera.updateProjectionMatrix();this.controls.target.copy(center);this.controls.update();this.render3D();
+  const r=this.canvas.getBoundingClientRect(),hr=this.host.getBoundingClientRect(),aspect=(r.width||hr.width||1)/Math.max(r.height||hr.height,1),tanV=Math.tan(THREE.MathUtils.degToRad(this.camera.fov/2)),tanH=tanV*aspect;
+  const direction=preserveAngle?this.camera.position.clone().sub(this.controls.target).normalize():new THREE.Vector3(.85,-1.25,.85).normalize(),right=new THREE.Vector3().crossVectors(this.camera.up,direction).normalize(),up=new THREE.Vector3().crossVectors(direction,right);let distance=0;
+  for(const x of [b[0],b[1]])for(const y of [b[2],b[3]])for(const z of [b[4],b[5]]){const p=new THREE.Vector3(x,y,z).sub(center),depth=p.dot(direction);distance=Math.max(distance,depth+Math.abs(p.dot(right))/tanH,depth+Math.abs(p.dot(up))/tanV);}
+  distance=Math.max(span*.5,distance*1.15);this.camera.aspect=aspect;this.camera.position.copy(center).add(direction.multiplyScalar(distance));
+  this.camera.near=Math.max(.0001,span/10000);this.camera.far=Math.max(span*1000,distance*10);this.camera.updateProjectionMatrix();this.controls.target.copy(center);this.controls.update();this.render3D();
  }
  render3D(){if(this.renderer){this.renderer.render(this.scene,this.camera);this.canvas.dataset.draws=Number(this.canvas.dataset.draws||0)+1;}}
  zoom(factor){this.camera.position.sub(this.controls.target).multiplyScalar(factor).add(this.controls.target);this.controls.update();this.render3D();}

@@ -21,8 +21,14 @@ function normalize(m){
  for(const c of m.cells)if(c.fill!=null)c.fill=Number(c.fill);for(const lattice of m.lattices||[])if(lattice.type==='hexagonal')lattice.cells=lattice.cells.map(e=>({...e,universe:e.universe??lattice.sharedUniverse??1}));
  return m;
 }
+function renderFraming({available,detail,span,cutaway}){
+ $('pin-detail').hidden=!available||(state.model.view!=='3d'&&!$('view-host').classList.contains('split'));$('pin-detail').textContent=detail?'Full length':'Pin detail';
+ $('pin-detail').title=detail?'Show the complete pin':'Show a short section with visible layers';
+ $('view-3d-label').textContent=detail?'3D - '+span.toFixed(2)+' cm section':'3D';
+ $('cut').setAttribute('aria-pressed',String(cutaway));
+}
 function openModel(m){state.model=normalize(structuredClone(m));state.undo=[];state.redo=[];state.occurrence=null;state.clonedOccurrence=null;state.scope='shared';state.page='editor';$('library').hidden=true;$('editor').hidden=false;$('editor').dataset.pane='view';$('export').disabled=false;$('validate').hidden=false;
- if(!state.viewer)state.viewer=new GeometryViewer($('view-host'),selectFromView,focusFromView,notice);
+ if(!state.viewer)state.viewer=new GeometryViewer($('view-host'),selectFromView,focusFromView,notice,renderFraming);
  save();renderEditor();redraw(true);document.title=plainLabel(state.model.name)+' - GM';$('main').focus({preventScroll:true});}
 function home(){state.page='library';$('library').hidden=false;$('editor').hidden=true;$('model-name').textContent='Models';$('validate').hidden=true;$('saved').textContent='';renderLibrary();document.title='GM - OpenMC geometry studio';$('library').querySelector('h1').focus({preventScroll:true});}
 function art(id){
@@ -153,8 +159,9 @@ $('undo').onclick=undo;$('redo').onclick=redo;$('add').onclick=()=>dialog('add-d
 $('export').onclick=()=>dialog('export-dialog');$('import').onclick=()=>$('files').click();
 $('model-name').onclick=()=>{if(state.page==='editor'){select('universe',0);$('editor').dataset.pane='properties';}};
 $('fit').onclick=()=>state.viewer?.fit();$('rotate').onclick=()=>state.viewer?.orbit();$('zoom-in').onclick=()=>state.viewer?.zoom(.8);$('zoom-out').onclick=()=>state.viewer?.zoom(1.25);
-$('split').onclick=()=>{$('view-host').classList.toggle('split');$('split').setAttribute('aria-pressed',String($('view-host').classList.contains('split')));state.viewer?.resize();state.viewer?.fit();};
-$('cut').onclick=()=>mutate(m=>m.cutaway=!m.cutaway,{record:false});
+$('pin-detail').onclick=()=>state.viewer?.toggleDetail();
+$('split').onclick=()=>{$('view-host').classList.toggle('split');$('split').setAttribute('aria-pressed',String($('view-host').classList.contains('split')));state.viewer?.updateFraming();state.viewer?.resize();state.viewer?.fit();};
+$('cut').onclick=()=>{if(state.viewer?.detailBounds)state.viewer.toggleDetailCutaway();else mutate(m=>m.cutaway=!m.cutaway,{record:false});};
 $('transparent').onclick=()=>mutate(m=>m.transparent=!m.transparent,{record:false});
 $('moderator').onchange=e=>mutate(m=>m.showModerator=e.target.checked,{record:false});
 $('color').onchange=e=>mutate(m=>m.colorBy=e.target.value,{record:false});
