@@ -23,9 +23,9 @@ const catalog = {
   benchmarks: BENCHMARKS.map(({ id, name, source, version, href, sourceNote, simplification }) => ({ id, name, source, version, href, sourceNote, simplification }))
 };
 await writeFile(path.join(output, "api", "models.json"), `${JSON.stringify(catalog, null, 2)}\n`);
-const shell=(await readdir(output)).filter(name=>/\.(js|css|html|webmanifest|svg)$/.test(name)&&name!=='sw.js').map(name=>'/'+name);
+const shell=(await readdir(output)).filter(name=>/\.(js|css|html|webmanifest|svg)$/.test(name)&&name!=='sw.js').map(name=>name==='index.html'?'/':'/'+name);
 for(const name of await readdir(path.join(output,'icons')))shell.push('/icons/'+name);
-const hash=createHash('sha256');for(const name of shell)hash.update(await readFile(path.join(output,name)));
 const worker=await readFile(path.join(root,'public/sw.js'),'utf8');
+const hash=createHash('sha256').update(worker);for(const name of shell)hash.update(await readFile(path.join(output,name==='/'?'index.html':name)));
 await writeFile(path.join(output,'sw.js'),worker.replace('__GM_CACHE_VERSION__',hash.digest('hex').slice(0,16)).replace('__GM_SHELL_FILES__',JSON.stringify(shell)));
 console.log(`Built ${output}`);

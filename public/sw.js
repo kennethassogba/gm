@@ -8,7 +8,8 @@ self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=
 self.addEventListener('fetch',event=>{
   const request=event.request,url=new URL(request.url);
   if(request.method!=='GET'||url.origin!==self.location.origin||url.pathname.startsWith('/api/'))return;
-  const path=url.pathname==='/'?'/index.html':url.pathname;
+  // Cloudflare redirects /index.html to /. Cache the canonical navigation URL.
+  const path=url.pathname==='/index.html'?'/':url.pathname;
   if(!SHELL.includes(path))return;
   event.respondWith(caches.open(CACHE).then(async cache=>{
     const cached=await cache.match(path);if(cached)return cached;
