@@ -129,8 +129,8 @@ export async function assistantRequest(request,env){
       actual+=reserve; // Refund only after a definitive response with usage.
       let response;
       try{response=await fetch('https://api.openai.com/v1/'+endpoint,{method:'POST',headers:{authorization:'Bearer '+env.OPENAI_API_KEY,'content-type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(70000)});}
-      catch{throw failure('OpenAI did not finish. Try a shorter request. The reserved allowance is retained until the daily reset.',502);}
-      if(!response.ok){if(response.status<500)actual-=reserve;throw failure(response.status===429?'OpenAI is busy. Try again shortly.':'The assistant could not connect to OpenAI. Try again later.',502);}
+      catch{throw failure('The assistant did not finish. Try a shorter request. The reserved allowance is retained until the daily reset.',502);}
+      if(!response.ok){if(response.status<500)actual-=reserve;throw failure(response.status===429?'The assistant is busy. Try again shortly.':'The assistant could not connect to its AI service. Try again later.',502);}
       const result=await response.json(),usage=result.usage;
       if(Number.isFinite(usage?.input_tokens)){
         const input=usage.input_tokens,cached=usage.input_tokens_details?.cached_tokens||0;

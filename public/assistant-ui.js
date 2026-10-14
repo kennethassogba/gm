@@ -37,7 +37,7 @@ export function installAssistant({getModel,prepareModel,applyModel,undo,notice})
   };
   async function refreshUsage(){
     $('usage-value').textContent='Loading...';
-    try{const response=await fetch('/api/assistant/usage',{cache:'no-store'}),data=await response.json();if(!response.ok)throw new Error(data.error);usage(data);$('assistant-connection').textContent=data.available?'Prompts and geometry context go to OpenAI when you send.':'OpenAI is not connected yet.';}
+    try{const response=await fetch('/api/assistant/usage',{cache:'no-store'}),data=await response.json();if(!response.ok)throw new Error(data.error);usage(data);$('assistant-connection').textContent=data.available?'Messages and geometry context are sent to the AI service when you send.':'The assistant is not connected yet.';}
     catch{$('usage-value').textContent='Unavailable';$('usage-reset').textContent='Connect to the internet to check your allowance.';}
   }
   $('assistant-toggle').onclick=()=>{setEnabled(true);$('assistant-prompt').focus({preventScroll:true});};
