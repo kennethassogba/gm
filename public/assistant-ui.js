@@ -12,7 +12,7 @@ export function installAssistant({getModel,prepareModel,ensureModel,applyModel,u
     if(!value)recognition?.abort();
   }
   setEnabled(enabled);
-  const say=text=>{$('assistant-status').textContent=text;$('assistant-status').hidden=!text;};
+  const say=text=>{$('assistant-status').textContent=String(text??'').replace(/[\u2013\u2014]/g,'-');$('assistant-status').hidden=!text;};
   const usage=data=>{
     $('usage-value').textContent=money(data.spent)+' / $0.50';$('usage-meter').value=Math.min(data.spent||0,.5);
     $('usage-reset').textContent='Resets '+new Date(data.resetsAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+' (midnight UTC).';

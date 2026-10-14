@@ -6,7 +6,7 @@ import {parseRegion} from './csg.js';
 import {GeometryViewer} from './viewer.js';
 import {installConstruction} from './construction-ui.js';
 import {syncDomains,canContain,constructGeometry} from './builder.js';
-const $=id=>document.getElementById(id),plainLabel=v=>String(v??'').replaceAll('\u00b7','-'),esc=v=>plainLabel(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+const $=id=>document.getElementById(id),plainLabel=v=>String(v??'').replace(/[\u00b7\u2013\u2014]/g,'-'),esc=v=>plainLabel(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const state={model:null,page:'library',filter:'general',undo:[],redo:[],transaction:null,scope:'shared',occurrence:null,paint:null,selectedSurfaces:[],documents:[],viewer:null,renderPending:false,measure:null};
 const STORAGE='gm.documents.v2';
 try{state.documents=JSON.parse(localStorage.getItem(STORAGE)||'[]');const old=localStorage.getItem('gm.studio.model.v1');if(!state.documents.length&&old)state.documents.push(JSON.parse(old));}catch{notice('Local storage unavailable. Export a copy before closing.');}
@@ -35,7 +35,7 @@ function renderFraming({available,detail,span,cutaway}){
 function openModel(m){state.model=normalize(structuredClone(m));state.multi=[];state.paint=null;state.undo=[];state.redo=[];state.occurrence=null;state.clonedOccurrence=null;state.scope='shared';state.page='editor';$('library').hidden=true;$('editor').hidden=false;$('editor').dataset.pane='view';$('export').disabled=false;$('validate').hidden=false;
  if(!state.viewer)state.viewer=new GeometryViewer($('view-host'),selectFromView,focusFromView,notice,renderFraming,delta=>{finishTransaction();mutate(m=>{applyScope(null);for(const id of state.multi?.length?state.multi:[m.selection.id]){const c=m.cells.find(c=>c.id===id);if(c&&!c.background)translateCell(m,c,(c.editorTranslation||c.translation||[0,0,0]).map((v,i)=>v+delta[i]));}});});
  save();renderEditor();redraw(true);document.title=plainLabel(state.model.name)+' - GM';$('main').focus({preventScroll:true});}
-function home(){state.page='library';$('library').hidden=false;$('editor').hidden=true;$('model-name').textContent='Models';$('validate').hidden=true;$('saved').textContent='';renderLibrary();document.title='GM - OpenMC geometry studio';$('library').querySelector('h1').focus({preventScroll:true});}
+function home(){state.page='library';$('library').hidden=false;$('editor').hidden=true;$('model-name').textContent='Models';$('validate').hidden=true;$('saved').textContent='';renderLibrary();document.title='GM OpenMC geometry studio';$('library').querySelector('h1').focus({preventScroll:true});}
 function art(id){
  const general=generalArt(id);if(general)return general;
  const hex=['hex19','candu','fast-hex','htgr'].includes(id);let out='<svg viewBox="0 0 230 112" aria-hidden="true">';

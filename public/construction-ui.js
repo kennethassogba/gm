@@ -4,7 +4,7 @@ import {getRecipe,resolveSpec,applyRecipeStep} from './recipes.js';
 import {compileModel,locate,parseRegion,regionValue} from './csg.js';
 
 const $=id=>document.getElementById(id);
-const esc=v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+const esc=v=>String(v??'').replace(/[\u2013\u2014]/g,'-').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const primitives=['cylinder','tube','sphere','shell','box','hexprism'];
 const title={tube:'Tube',shell:'Spherical shell',rotate:'Rotate cells',array:'Cell array',cylinder:'Cylinder',sphere:'Sphere',box:'Box',hexprism:'Hexagonal prism',pin:'Fuel pin',lattice:'Lattice',universe:'Universe',boolean:'Combine cells',place:'Place universe',boundary:'Model boundary',move:'Move cells',group:'Make universe'};
 const field=(name,label,value,type='number')=>'<label class="build-field">'+label+'<input name="'+name+'" type="'+type+'" '+(type==='number'?'step="any"':'')+' value="'+esc(value)+'" required></label>';
