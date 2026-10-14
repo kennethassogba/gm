@@ -67,6 +67,21 @@ export function compileModel(model){
  return{model,surfaces,cells,universes,lattices};
 }
 const inside=(p,b)=>p.every((x,k)=>x>=b[k*2]&&x<=b[k*2+1]);
+// Conservative interval arithmetic: discard a parent clip only when its whole
+// child bounding box is inside. Sampling corners alone fails for concave CSG.
+export function regionBoundsInterval(tree,surfaces,b){
+ if(!tree)return[-1,-1];
+ if(tree.op==='not'){const [lo,hi]=regionBoundsInterval(tree.a,surfaces,b);return[-hi,-lo];}
+ if(tree.op!=='surface'){const a=regionBoundsInterval(tree.a,surfaces,b),c=regionBoundsInterval(tree.b,surfaces,b),op=tree.op==='and'?Math.max:Math.min;return[op(a[0],c[0]),op(a[1],c[1])];}
+ const s=surfaces.get(tree.id),p=s?.params;if(!s)return[-Infinity,Infinity];let range;
+ const linear=(weights,constant=0)=>weights.reduce((r,w,i)=>[r[0]+Math.min(w*b[i*2],w*b[i*2+1]),r[1]+Math.max(w*b[i*2],w*b[i*2+1])],[constant,constant]);
+ if(s.type.endsWith('-plane')){const axis='xyz'.indexOf(s.type[0]),v=p[s.type[0]+'0'];range=[b[axis*2]-v,b[axis*2+1]-v];}
+ else if(s.type==='plane')range=linear([p.a,p.b,p.c],-p.d);
+ else if(s.type==='sphere'||s.type.endsWith('-cylinder')){
+  let min=0,max=0;for(let k=0;k<3;k++)if(s.type==='sphere'||s.type[0]!=='xyz'[k]){const center=p['xyz'[k]+'0']||0,lo=b[k*2]-center,hi=b[k*2+1]-center;min+=(lo<=0&&hi>=0?0:Math.min(lo*lo,hi*hi));max+=Math.max(lo*lo,hi*hi);}range=[Math.sqrt(min)-p.r,Math.sqrt(max)-p.r];
+ }else return[-Infinity,Infinity];
+ return tree.negative?range:[-range[1],-range[0]];
+}
 export function collectInstances(compiled,focus=compiled.model.focus){
  const {cells,universes,lattices,surfaces}=compiled,items=[];const top=universes.get(focus?.universe??0);if(!top)return items;
  const initial=top.bounds||[-2,2,-2,2,-2,2];
@@ -84,7 +99,7 @@ export function collectInstances(compiled,focus=compiled.model.focus){
  if(nb.some((x,k)=>k%2&&x<=nb[k-1]))continue;
  walk(e.universe,nextOffset,nb,[...path,{lattice:l.id,index:i,universe:e.universe}],depth+1,[...ancestors,c.id],l.type==='hexagonal'?[...masks,{hex:{pitch:l.pitch[0],orientation:l.orientation},origin:nextOffset}]:masks);
  }}else{const tr=c.translation||[0,0,0];walk(Number(c.fill),offset.map((x,k)=>x+tr[k]),b.map((v,k)=>v-tr[Math.floor(k/2)]),path,depth+1,[...ancestors,c.id],masks);}
- }else{let shape=shapeForCell(c,surfaces,b);const localClips=clips.map(({origin,...mask})=>({...mask,shift:offset.map((v,k)=>v-origin[k])})).filter(mask=>!(mask.hex&&shape.type==='tube'&&Math.hypot(shape.center[0]+mask.shift[0],shape.center[1]+mask.shift[1])+shape.outer<=mask.hex.pitch/2+1e-9));if(localClips.length)shape={type:'csg'};items.push({cell:c,universe:u,position:offset,bounds:b,path,ancestors,shape,clips:localClips});}
+ }else{let shape=shapeForCell(c,surfaces,b);const localClips=clips.map(({origin,...mask})=>({...mask,shift:offset.map((v,k)=>v-origin[k])})).filter(mask=>{if(mask.hex)return !(shape.type==='tube'&&Math.hypot(shape.center[0]+mask.shift[0],shape.center[1]+mask.shift[1])+shape.outer<=mask.hex.pitch/2+1e-9);const shifted=b.map((v,i)=>v+mask.shift[i>>1]);return regionBoundsInterval(parseRegion(mask.region),surfaces,shifted)[1]>-1e-10;});if(localClips.length)shape={type:'csg'};items.push({cell:c,universe:u,position:offset,bounds:b,path,ancestors,shape,clips:localClips});}
  }}
  walk(top.id,[0,0,0],initial,focus?.path||[],0);return items;
 }

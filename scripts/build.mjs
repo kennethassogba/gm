@@ -10,7 +10,7 @@ const output = path.join(root, "dist");
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 await cp(path.join(root, "public"), output, { recursive: true });
-await build({ entryPoints: [path.join(root, "public/app.js")], bundle: true, format: "esm", minify: true, sourcemap: false, outfile: path.join(output, "app.js"), target: "es2022" });
+await build({ entryPoints: [path.join(root, "public/app.js"),path.join(root,"public/section-worker.js")], bundle: true, format: "esm", minify: true, sourcemap: false, outdir: output, target: "es2022" });
 await mkdir(path.join(output, "api"), { recursive: true });
 const catalog = {
   name: "GM Studio model catalog",

@@ -1,13 +1,48 @@
 import * as THREE from 'three';
-import {intersectRayRegion} from './csg-raycast.js';
+import {intersectRayRegion,rayRegionContains} from './csg-raycast.js';
 
 // The box only schedules fragments. Visible boundaries, normals and depth come
 // from ray/surface intersections and the canonical Boolean expression.
-export function createCSGMaterial(region,source,selected){
+function dataTexture(values,maxSize){
+ const texels=Math.ceil(values.length/4),width=Math.min(maxSize,Math.max(1,texels)),height=Math.ceil(texels/width);
+ if(height>maxSize)throw new Error('This geometry exceeds the GPU texture capacity. Focus a smaller universe.');
+ const data=new Float32Array(width*height*4);data.set(values);
+ const texture=new THREE.DataTexture(data,width,height,THREE.RGBAFormat,THREE.FloatType);texture.needsUpdate=true;return texture;
+}
+
+export function createCSGMaterial(region,source,selected,maxTextureSize=4096){
+ const textures=[],large=!region.expression,n=region.polynomials.length;
+ let declarations,inside,extra={};
+ if(large){
+  const coefficients=dataTexture(region.polynomials.flatMap(({q,offset})=>[...q.slice(0,4),...q.slice(4,8),...q.slice(8,10),0,0,...offset,0]),maxTextureSize);
+  const instructions=dataTexture(region.program.flat(),maxTextureSize);textures.push(coefficients,instructions);
+  extra={coefficients:{value:coefficients},instructions:{value:instructions},surfaceCount:{value:n},instructionCount:{value:region.program.length},entry:{value:region.entry}};
+  declarations=`uniform sampler2D coefficients,instructions;
+   uniform int surfaceCount,instructionCount,entry;
+   vec4 fetchAt(sampler2D data,int index){int width=textureSize(data,0).x;return texelFetch(data,ivec2(index%width,index/width),0);}
+   vec4 A(int i){return fetchAt(coefficients,i*4);}
+   vec4 B(int i){return fetchAt(coefficients,i*4+1);}
+   vec2 C(int i){return fetchAt(coefficients,i*4+2).xy;}
+   vec3 O(int i){return fetchAt(coefficients,i*4+3).xyz;}`;
+  inside=`int pc=entry;
+   for(int step=0;step<instructionCount;step++){
+    if(pc<0)return pc==-1;
+    vec4 instruction=fetchAt(instructions,pc);int id=int(instruction.x);
+    float value=id==surface?signAtBoundary:valueAt(id,point);
+    bool hit=instruction.y>0.5?value<=0.0:value>0.0;pc=int(hit?instruction.z:instruction.w);
+   }
+   return pc==-1;`;
+ }else{
+  declarations=`uniform vec4 coeffA[${n}],coeffB[${n}];uniform vec2 coeffC[${n}];uniform vec3 origins[${n}];
+   vec4 A(int i){return coeffA[i];}vec4 B(int i){return coeffB[i];}vec2 C(int i){return coeffC[i];}vec3 O(int i){return origins[i];}`;
+  inside=`float f[${n}];for(int i=0;i<${n};i++)f[i]=i==surface?signAtBoundary:valueAt(i,point);return ${region.expression};`;
+ }
+
  const color=source.color.clone();if(selected)color.lerp(new THREE.Color('#ffffff'),.22);
  const material=new THREE.ShaderMaterial({
   side:THREE.BackSide,transparent:source.transparent,opacity:source.opacity,depthWrite:source.depthWrite,
   uniforms:{
+   ...extra,boxMin:{value:new THREE.Vector3(region.bounds[0],region.bounds[2],region.bounds[4])},boxMax:{value:new THREE.Vector3(region.bounds[1],region.bounds[3],region.bounds[5])},
    coeffA:{value:region.polynomials.map(({q})=>new THREE.Vector4(...q.slice(0,4)))},
    coeffB:{value:region.polynomials.map(({q})=>new THREE.Vector4(...q.slice(4,8)))},
    coeffC:{value:region.polynomials.map(({q})=>new THREE.Vector2(...q.slice(8,10)))},
@@ -27,10 +62,9 @@ export function createCSGMaterial(region,source,selected){
     gl_Position=projectionMatrix*viewMatrix*world*vec4(position,1.0);
    }`,
   fragmentShader:`
-   uniform vec4 coeffA[${region.polynomials.length}];
-   uniform vec4 coeffB[${region.polynomials.length}];
-   uniform vec2 coeffC[${region.polynomials.length}];
-   uniform vec3 origins[${region.polynomials.length}];
+   ${declarations}
+   uniform vec3 boxMin,boxMax;
+   vec3 traceOrigin;
    uniform vec3 baseColor;
    uniform float alpha,selectionGlow;
    uniform bool cutX;
@@ -39,21 +73,19 @@ export function createCSGMaterial(region,source,selected){
    varying vec3 rayOrigin;
    varying vec3 worldOffset;
    float valueAt(int i,vec3 point){
-    vec3 p=point+origins[i];vec4 a=coeffA[i],b=coeffB[i];vec2 c=coeffC[i];
+    vec3 p=point+O(i);vec4 a=A(i),b=B(i);vec2 c=C(i);
     return dot(a.xyz,p*p)+a.w*p.x*p.y+b.x*p.y*p.z+b.y*p.x*p.z+b.z*p.x+b.w*p.y+c.x*p.z+c.y;
    }
    vec3 normalAt(int i,vec3 point){
-    vec3 p=point+origins[i];vec4 a=coeffA[i],b=coeffB[i];
-    return 2.0*a.xyz*p+vec3(a.w*p.y+b.y*p.z+b.z,a.w*p.x+b.x*p.z+b.w,b.x*p.y+b.y*p.x+coeffC[i].x);
+    vec3 p=point+O(i);vec4 a=A(i),b=B(i);
+    return 2.0*a.xyz*p+vec3(a.w*p.y+b.y*p.z+b.z,a.w*p.x+b.x*p.z+b.w,b.x*p.y+b.y*p.x+C(i).x);
    }
    bool inside(vec3 point,int surface,float signAtBoundary){
-    float f[${region.polynomials.length}];
-    for(int i=0;i<${region.polynomials.length};i++)f[i]=i==surface?signAtBoundary:valueAt(i,point);
-    return ${region.expression};
+    ${inside}
    }
    void consider(float t,int surface,vec3 direction,inout float nearest,inout vec3 normal){
     if(t<0.0||t>=nearest)return;
-    vec3 p=rayOrigin+t*direction;
+    vec3 p=traceOrigin+t*direction;
     if(cutX&&p.x+worldOffset.x>0.0)return;
     vec3 gradient=normalAt(surface,p);float derivative=dot(gradient,direction);
     if(abs(derivative)<1e-12)return;
@@ -68,10 +100,15 @@ export function createCSGMaterial(region,source,selected){
    }
    void main(){
     vec3 direction=normalize(localPoint-rayOrigin),normal=vec3(0.0);float nearest=1e30;
-    for(int i=0;i<${region.polynomials.length};i++){
-     vec4 a=coeffA[i],b=coeffB[i];
+    vec3 safeDirection=mix(direction,vec3(1e-20),lessThan(abs(direction),vec3(1e-20)));
+    vec3 t0=(boxMin-rayOrigin)/safeDirection,t1=(boxMax-rayOrigin)/safeDirection,lo=min(t0,t1),hi=max(t0,t1);
+    float start=max(0.0,max(lo.x,max(lo.y,lo.z))),end=min(hi.x,min(hi.y,hi.z));
+    if(end<start)discard;
+    traceOrigin=rayOrigin+max(0.0,start-length(boxMax-boxMin)*1e-4)*direction;
+    for(int i=0;i<${large?'surfaceCount':n};i++){
+     vec4 a=A(i),b=B(i);
      float qa=dot(a.xyz,direction*direction)+a.w*direction.x*direction.y+b.x*direction.y*direction.z+b.y*direction.x*direction.z;
-     float qb=dot(normalAt(i,rayOrigin),direction),qc=valueAt(i,rayOrigin);
+     float qb=dot(normalAt(i,traceOrigin),direction),qc=valueAt(i,traceOrigin);
      if(abs(qa)<1e-12){if(abs(qb)>1e-12)consider(-qc/qb,i,direction,nearest,normal);}
      else{
       float disc=qb*qb-4.0*qa*qc;
@@ -81,8 +118,13 @@ export function createCSGMaterial(region,source,selected){
       }
      }
     }
+    if(cutX&&abs(direction.x)>1e-12){
+     float t=-(traceOrigin.x+worldOffset.x)/direction.x;vec3 p=traceOrigin+t*direction;
+     vec4 clip=projectionMatrix*viewMatrix*vec4(p+worldOffset,1.0);
+     if(t>=0.0&&t<nearest&&inside(p,-1,0.0)&&clip.z>=-clip.w&&clip.z<=clip.w){nearest=t;normal=vec3(1.0,0.0,0.0);}
+    }
     if(nearest==1e30)discard;
-    vec3 p=rayOrigin+nearest*direction;
+    vec3 p=traceOrigin+nearest*direction;
     vec4 clip=projectionMatrix*viewMatrix*vec4(p+worldOffset,1.0);
     gl_FragDepth=clip.z/clip.w*0.5+0.5;
     // Face the shading normal toward the eye when viewing from inside a cell.
@@ -93,7 +135,8 @@ export function createCSGMaterial(region,source,selected){
     #include <colorspace_fragment>
    }`
  });
- material.color=source.color.clone();material.userData.analyticCSG=true;
+ material.addEventListener('dispose',()=>textures.forEach(texture=>texture.dispose()));
+ material.color=source.color.clone();material.userData.analyticCSG=true;material.userData.textureBytes=textures.reduce((sum,texture)=>sum+texture.image.data.byteLength,0);
  return material;
 }
 
@@ -105,7 +148,12 @@ export function installCSGPicking(mesh,region){
    this.getMatrixAt(instanceId,instance);world.multiplyMatrices(this.matrixWorld,instance);inverse.copy(world).invert();localRay.copy(raycaster.ray).applyMatrix4(inverse);
    if(!localRay.intersectBox(box,point))continue;
    const accept=p=>{point.set(...p).applyMatrix4(world);const distance=point.distanceTo(raycaster.ray.origin);return distance>=raycaster.near&&distance<=raycaster.far&&(!this.material.uniforms.cutX.value||point.x<=0);};
-   const t=intersectRayRegion(region,localRay.origin.toArray(),localRay.direction.toArray(),accept);if(t==null)continue;
+   let t=intersectRayRegion(region,localRay.origin.toArray(),localRay.direction.toArray(),accept);
+   if(this.material.uniforms.cutX.value&&Math.abs(raycaster.ray.direction.x)>1e-12){
+    const worldT=-raycaster.ray.origin.x/raycaster.ray.direction.x;
+    if(worldT>=raycaster.near&&worldT<=raycaster.far){raycaster.ray.at(worldT,point).applyMatrix4(inverse);const localT=point.clone().sub(localRay.origin).dot(localRay.direction);if(localT>=0&&(t==null||localT<t)&&rayRegionContains(region,point.toArray()))t=localT;}
+   }
+   if(t==null)continue;
    localRay.at(t,point).applyMatrix4(world);hits.push({distance:point.distanceTo(raycaster.ray.origin),point:point.clone(),object:this,instanceId});
   }
  };

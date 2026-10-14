@@ -176,7 +176,7 @@ function applyScope(surfaceId){
 }
 $('home').onclick=home;$('empty').onclick=()=>openModel(createEmptyModel());$('search').oninput=renderLibrary;
 $('undo').onclick=undo;$('redo').onclick=redo;$('add').onclick=()=>dialog('add-dialog');$('add-first').onclick=()=>dialog('add-dialog');
-$('export').onclick=()=>dialog('export-dialog');$('import').onclick=()=>$('files').click();
+$('export').onclick=()=>{$('export-plane').value=['xy','xz','yz'].includes(state.model.view)?state.model.view:'xy';dialog('export-dialog');};$('import').onclick=()=>$('files').click();
 $('model-name').onclick=()=>{if(state.page==='editor'){select('universe',0);$('editor').dataset.pane='properties';}};
 $('fit').onclick=()=>state.viewer?.fit();$('rotate').onclick=()=>state.viewer?.orbit();$('zoom-in').onclick=()=>state.viewer?.zoom(.8);$('zoom-out').onclick=()=>state.viewer?.zoom(1.25);
 $('pin-detail').onclick=()=>state.viewer?.toggleDetail();
@@ -206,6 +206,10 @@ document.addEventListener('click',e=>{
  if(b.dataset.add){
   $('add-dialog').close();if(b.dataset.add==='pin'||b.dataset.add==='lattice'){mutate(m=>addComponent(m,b.dataset.add==='pin'?'pin':'pwr17'),{fit:true});}
   else mutate(m=>addPrimitive(m,b.dataset.add),{fit:true});
+ }
+ if(b.dataset.sectionExport){
+  const format=b.dataset.sectionExport,axis=$('export-plane').value,status=$('section-export-status');b.disabled=true;status.textContent='Preparing section...';
+  state.viewer.sections.export(axis,format).then(result=>{download('section-'+axis+'.'+format,format==='pdf'?result.bytes:result.sections[0].svg,format==='pdf'?'application/pdf':'image/svg+xml');status.textContent='Downloaded. Curve tolerance is recorded in the file.';}).catch(error=>{status.textContent=error.message;}).finally(()=>b.disabled=false);
  }
  if(b.dataset.export){try{const key=b.dataset.export;download({geometry:'geometry.xml',materials:'materials.xml',python:'model.py',project:'model.gm.json'}[key],key==='geometry'?exportGeometryXML(state.model):key==='materials'?exportMaterialsXML(state.model):key==='python'?exportPython(state.model):JSON.stringify(state.model,null,2));}catch(error){notice(error.message+' Check the geometry.');}}
  if(b.id==='property-add')construction.addMenu();

@@ -13,13 +13,17 @@ The source of truth is a JSON document (`gm-openmc-model/v1`), in centimetres. I
 | Part | Implementation |
 | --- | --- |
 | Construction | Shared JavaScript builders for the editor, examples and model API |
-| Views | GPU ray/surface intersections for Boolean cells, Three.js instances for repeated universes, and CSG evaluation for sections |
+| Views | GPU ray/surface intersections for all supported cells; repeated universes share instances; workers build vector sections |
 | PDF import | OpenAI reads the selected PDF; a constrained plan runs through the shared builders, with source pages and notes saved in model metadata |
 | Export | `geometry.xml`, `materials.xml`, JSON and an editable OpenMC Python script |
 | Storage | Local browser storage for models; a Cloudflare Durable Object for optional mailing-list subscriptions |
 | Hosting | Cloudflare Worker and static assets, with a service worker for offline use |
 
-Boolean cells with up to 48 distinct surfaces and 256 region nodes render directly from their surface equations, including holes and intersections. Picking uses the same CSG boundaries. Larger expressions fall back to worker-generated meshes; standalone primitives use tessellated meshes. Sections and exports use the canonical geometry. Geometry checks sample for gaps and overlaps; they do not prove validity. Material presets and generic reactor examples are illustrative. Benchmark sources and simplifications live in model metadata.
+The 3D view evaluates surface equations and Boolean regions directly, including primitives, holes and intersections. Small regions use shader uniforms; larger regions use data textures and a short-circuit Boolean program. Bounding boxes schedule the GPU work without approximating the visible surfaces. Picking uses the same CSG boundaries. GPU arithmetic has finite precision, and large models remain limited by device memory and rendering cost.
+
+XY/XZ/YZ sections are SVG paths computed in a worker, with zoom, pan and SVG/PDF export. Curved boundaries use adaptive line segments targeting 0.15 display pixel before polygon Boolean operations. Export files record the target tolerance in centimetres. These are vector approximations, not exact symbolic curves or certified error bounds. Repeated sections reuse paths; only visible views are computed. The canonical model and OpenMC exports retain their surface equations.
+
+Geometry checks sample for gaps and overlaps; they do not prove validity. Material presets and generic reactor examples are illustrative. Benchmark sources and simplifications live in model metadata.
 
 GM does not run particle transport. DAGMC import, rotated universe fills, distributed materials, settings and tallies are not implemented. Review exported geometry before using it in a simulation.
 
