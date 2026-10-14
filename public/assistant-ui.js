@@ -17,6 +17,8 @@ export function installAssistant({getModel,prepareModel,ensureModel,applyModel,u
     $('usage-value').textContent=money(data.spent)+' / $0.50';$('usage-meter').value=Math.min(data.spent||0,.5);
     $('usage-reset').textContent='Resets '+new Date(data.resetsAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+' (midnight UTC).';
     $('mailing-list').hidden=!data.mailingList;
+    $('mailing-form').hidden=!!data.subscribed;$('mailing-remove').hidden=!data.subscribed;
+    $('mailing-status').textContent=data.subscribed?'You are on the list.':'';
   };
   async function refreshUsage(){
     $('usage-value').textContent='Loading...';
@@ -68,11 +70,11 @@ export function installAssistant({getModel,prepareModel,ensureModel,applyModel,u
   }
   $('mailing-form').onsubmit=async e=>{
     e.preventDefault();const button=$('mailing-submit');button.disabled=true;
-    try{const response=await fetch('/api/assistant/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:$('mailing-email').value,consent:$('mailing-consent').checked,website:$('mailing-website').value})}),data=await response.json();if(!response.ok)throw new Error(data.error);$('mailing-status').textContent='You are on the list.';$('mailing-form').reset();}
+    try{const response=await fetch('/api/assistant/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:$('mailing-email').value,consent:$('mailing-consent').checked,website:$('mailing-website').value})}),data=await response.json();if(!response.ok)throw new Error(data.error);$('mailing-status').textContent='You are on the list.';$('mailing-form').reset();$('mailing-form').hidden=true;$('mailing-remove').hidden=false;}
     catch(error){$('mailing-status').textContent=error.message||'Could not subscribe. Try again.';}finally{button.disabled=false;}
   };
   $('mailing-remove').onclick=async()=>{
-    try{const response=await fetch('/api/assistant/subscribe',{method:'DELETE'});if(!response.ok)throw new Error();$('mailing-status').textContent='Subscription removed for this browser.';}catch{$('mailing-status').textContent='Could not remove the subscription. Try again.';}
+    try{const response=await fetch('/api/assistant/subscribe',{method:'DELETE'});if(!response.ok)throw new Error();$('mailing-status').textContent='Unsubscribed.';$('mailing-form').hidden=false;$('mailing-remove').hidden=true;}catch{$('mailing-status').textContent='Could not remove the subscription. Try again.';}
   };
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='a'&&!document.querySelector('dialog[open]')){e.preventDefault();$('assistant-toggle').click();}});
 }

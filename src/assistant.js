@@ -22,7 +22,7 @@ export class AssistantLedger {
     }
     if(action==='usage'){
       const row=await storage.get('day:'+day()+':'+arg.id)||{spent:0};
-      return json({spent:row.spent/1e6,limit:LIMIT/1e6,resetsAt:new Date(midnight()).toISOString(),pending:!!row.pending});
+      return json({spent:row.spent/1e6,limit:LIMIT/1e6,resetsAt:new Date(midnight()).toISOString(),pending:!!row.pending,subscribed:!!await storage.get('signup:'+arg.id)});
     }
     if(action==='reserve')return storage.transaction(async tx=>{
       const key='day:'+day()+':'+arg.id,globalKey='day:'+day()+':global';
