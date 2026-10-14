@@ -13,13 +13,13 @@ The source of truth is a JSON document (`gm-openmc-model/v1`), in centimetres. I
 | Part | Implementation |
 | --- | --- |
 | Construction | Shared JavaScript builders for the editor, examples and model API |
-| Views | Three.js instances for repeated universes; workers generate Boolean meshes; sections evaluate CSG regions |
+| Views | GPU ray/surface intersections for Boolean cells, Three.js instances for repeated universes, and CSG evaluation for sections |
 | PDF import | OpenAI reads the selected PDF; a constrained plan runs through the shared builders, with source pages and notes saved in model metadata |
 | Export | `geometry.xml`, `materials.xml`, JSON and an editable OpenMC Python script |
 | Storage | Local browser storage for models; a Cloudflare Durable Object for optional mailing-list subscriptions |
 | Hosting | Cloudflare Worker and static assets, with a service worker for offline use |
 
-The 3D mesh approximates curved and Boolean surfaces. Sections and exports use the canonical geometry. Geometry checks sample for gaps and overlaps; they do not prove validity. Material presets and generic reactor examples are illustrative. Benchmark sources and simplifications live in model metadata.
+Boolean cells with up to 48 distinct surfaces and 256 region nodes render directly from their surface equations, including holes and intersections. Picking uses the same CSG boundaries. Larger expressions fall back to worker-generated meshes; standalone primitives use tessellated meshes. Sections and exports use the canonical geometry. Geometry checks sample for gaps and overlaps; they do not prove validity. Material presets and generic reactor examples are illustrative. Benchmark sources and simplifications live in model metadata.
 
 GM does not run particle transport. DAGMC import, rotated universe fills, distributed materials, settings and tallies are not implemented. Review exported geometry before using it in a simulation.
 

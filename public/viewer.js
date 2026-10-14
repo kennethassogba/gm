@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {TransformControls} from 'three/addons/controls/TransformControls.js';
 import {compileModel,collectInstances,locate} from './csg.js';
+import {compileRayRegion} from './csg-raycast.js';
+import {createCSGMaterial,installCSGPicking} from './csg-material.js';
 
 function tubeGeometry(outer,inner,height,cutaway,segments){
  const shape=new THREE.Shape(),steps=segments,end=cutaway?Math.PI*1.5:Math.PI*2;
@@ -98,6 +100,12 @@ export class GeometryViewer {
    if(sh.type==='tube'){geometry=tubeGeometry(sh.outer,sh.inner,dz,cutaway&&this.items.length<5000,segments);center=[sh.center[0],sh.center[1],b[4]];}
    else if(sh.type==='sphere'){geometry=new THREE.SphereGeometry(sh.radius,32,20);center=sh.center;}
    else if(sh.type==='csg'||sh.type==='moderator'){
+    const region=compileRayRegion(item.cell.region,this.compiled.surfaces,b,item.clips);
+    if(region){
+     const proxy=new THREE.BoxGeometry(dx,dy,dz);proxy.translate(...center);
+     const analytic=createCSGMaterial(region,material,this.selectedCells.has(item.cell.id));material.dispose();
+     const mesh=this.addBatch(proxy,analytic,items,[0,0,0]);installCSGPicking(mesh,region);continue;
+    }
     const key=JSON.stringify([item.cell.region,this.model.surfaces,b,item.clips]);
     const complete=positions=>{if(!positions.length)return;const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(positions,3));g.computeVertexNormals();this.addBatch(g,material,items,[0,0,0]);};
     if(this.cache.has(key))complete(this.cache.get(key));else{const id=crypto.randomUUID();this.jobs.set(id,{key,revision:this.revision,complete});this.updateBusy();this.worker.postMessage({id,region:item.cell.region,surfaces:this.model.surfaces,bounds:b,clips:item.clips});}
@@ -110,9 +118,10 @@ export class GeometryViewer {
   const mesh=new THREE.InstancedMesh(geometry,material,items.length),matrix=new THREE.Matrix4();
   items.forEach((item,i)=>{const explode=this.model.exploded&&this.items.length<1000?item.cell.id*.12:0;matrix.makeTranslation(item.position[0]+center[0]+explode,item.position[1]+center[1],item.position[2]+center[2]);mesh.setMatrixAt(i,matrix);if(this.selectedCells.has(item.cell.id))mesh.setColorAt(i,new THREE.Color(material.color).lerp(new THREE.Color('#ffffff'),.22));});
   mesh.instanceMatrix.needsUpdate=true;mesh.userData.items=items;this.group.add(mesh);this.meshes.push(mesh);
-  if(this.detailBounds&&this.selectedCells.has(items[0].cell.id)){
+  if(this.detailBounds&&this.selectedCells.has(items[0].cell.id)&&!material.userData.analyticCSG){
    const edges=new THREE.EdgesGeometry(geometry,20);for(const item of items){const outline=new THREE.LineSegments(edges,new THREE.LineBasicMaterial({color:'#c2c6ff'})),explode=this.model.exploded?item.cell.id*.12:0;outline.position.set(item.position[0]+center[0]+explode,item.position[1]+center[1],item.position[2]+center[2]);this.group.add(outline);}
   }
+  return mesh;
  }
  updateBusy(){const status=document.getElementById('geometry-status');if(status)status.hidden=![...this.jobs.values()].some(job=>job.revision===this.revision);}
  resize(){
