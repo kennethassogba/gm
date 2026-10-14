@@ -1,14 +1,15 @@
-"""Install an unmodified 1280 x 720 workspace screenshot as the social preview."""
+"""Copy an unmodified workspace screenshot, preserving its actual image format."""
 import argparse
 from pathlib import Path
 import shutil
-import struct
+from PIL import Image
 
 parser = argparse.ArgumentParser()
-parser.add_argument("screenshot", type=Path, help="PNG captured from the GM workspace")
+parser.add_argument("screenshot", type=Path, help="PNG or JPEG captured from the GM workspace")
 args = parser.parse_args()
-header = args.screenshot.read_bytes()[:24]
-if header[:8] != b"\x89PNG\r\n\x1a\n" or struct.unpack(">II", header[16:24]) != (1280, 720):
-    parser.error("Capture a 1280 x 720 PNG screenshot.")
+with Image.open(args.screenshot) as image:
+    if image.size != (1280, 720) or image.format not in ('PNG','JPEG'):
+        parser.error("Capture a 1280 x 720 PNG or JPEG screenshot.")
+    extension = 'jpg' if image.format == 'JPEG' else 'png'
 root = Path(__file__).resolve().parent.parent
-shutil.copyfile(args.screenshot, root / "public/social-preview.png")
+shutil.copyfile(args.screenshot, root / ('public/social-preview.'+extension))
