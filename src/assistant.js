@@ -51,6 +51,7 @@ export class AssistantLedger {
       if(prior?.time>Date.now()-60000)return json({error:'Wait a minute before updating your subscription.'},429);
       const digest=await crypto.subtle.digest('SHA-256',encoder.encode(arg.email));
       const hash=Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join('');
+      if(prior?.hash&&prior.hash!==hash)await storage.delete('subscriber:'+prior.hash);
       await storage.put('subscriber:'+hash,{email:arg.email,consent:'GM product updates',subscribedAt:new Date().toISOString()});
       await storage.put(key,{time:Date.now(),hash});return json({ok:true});
     }

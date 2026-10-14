@@ -300,6 +300,6 @@ installAssistant({getModel:()=>state.model,prepareModel:()=>{
  const draft=structuredClone(state.model);
  if(state.scope==='occurrence'&&state.occurrence?.path?.length&&state.clonedOccurrence!==draft.selection?.id){const result=cloneOccurrence(draft,state.occurrence.path,draft.selection.id);draft.selection.id=result.cellId;draft.focus={universe:draft.cells.find(c=>c.id===result.cellId).universe,path:result.path};}
  return draft;
-},ensureModel:()=>{if(!state.model||state.page!=='editor')openModel(createEmptyModel());},applyModel:model=>{finishTransaction();state.multi=[];state.occurrence=null;state.scope='shared';mutate(m=>Object.assign(m,normalize(model)),{fit:true});},undo,notice});
+},ensureModel:()=>{if(!state.model||state.page!=='editor')openModel(createEmptyModel());},applyModel:model=>{finishTransaction();state.multi=[];state.occurrence=null;state.scope='shared';mutate(m=>Object.assign(m,normalize(model)),{fit:true});document.title=plainLabel(state.model.name)+' - GM';},undo,notice});
 installApp();
 renderLibrary();

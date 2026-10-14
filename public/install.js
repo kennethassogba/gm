@@ -1,13 +1,14 @@
 const $=id=>document.getElementById(id);
 export function installApp(){
-  let deferred=null,edits=0;
+  let deferred=null,edits=0;const openedAt=Date.now();
   const installed=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone;
   const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
   const android=/Android/.test(navigator.userAgent);
   const safari=/Safari/.test(navigator.userAgent)&&!/Chrome|Chromium|Edg/.test(navigator.userAgent);
   const dismissed=()=>{try{return Number(localStorage.getItem('gm.install.dismissed')||0)>Date.now()-30*86400000;}catch{return false;}};
   function dismiss(){$('install-nudge').hidden=true;try{localStorage.setItem('gm.install.dismissed',String(Date.now()));}catch{}}
-  function suggest(){if(edits>=4&&!installed()&&!dismissed()&&(deferred||ios||safari||android))$('install-nudge').hidden=false;}
+  function suggest(){if(edits>=4&&Date.now()-openedAt>=90000&&!installed()&&!dismissed()&&(deferred||ios||safari||android))$('install-nudge').hidden=false;}
+  setTimeout(suggest,90000);
   addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;suggest();});
   addEventListener('appinstalled',()=>{deferred=null;$('install-nudge').hidden=true;$('install-app').textContent='Installed';$('install-app').disabled=true;});
   addEventListener('gm:modelchange',()=>{edits++;suggest();});
@@ -20,4 +21,6 @@ export function installApp(){
   $('install-app').onclick=open;$('install-nudge-button').onclick=open;$('install-close').onclick=()=>$('install-dialog').close();
   if(installed()){$('install-app').textContent='Installed';$('install-app').disabled=true;}
   if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  const resize=()=>document.documentElement.style.setProperty('--workspace-height',(window.visualViewport?.scale===1?window.visualViewport.height:window.innerHeight)+'px');
+  window.visualViewport?.addEventListener('resize',resize);resize();
 }
