@@ -19,3 +19,14 @@ class_name = "SubscriptionStore"
 [exports.SubscriptionStore]
 type = "durable-object"
 storage = "sqlite"
+
+[[durable_objects.bindings]]
+name = "PDF_IMPORT_LIMITS"
+class_name = "PDFImportLimits"
+
+[exports.PDFImportLimits]
+type = "durable-object"
+storage = "sqlite"
+
+[limits]
+cpu_ms = 30000

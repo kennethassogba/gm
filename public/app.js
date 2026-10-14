@@ -1,3 +1,4 @@
+import {installPDFImport,pdfCard} from './pdf-import-ui.js';
 import {generalArt} from './example-art.js';
 import {installPreferences} from './preferences.js';
 import {installApp} from './install.js';
@@ -48,7 +49,7 @@ function art(id){
 function renderLibrary(){
  document.querySelectorAll('[data-filter]').forEach(b=>{const family=b.dataset.filter;b.setAttribute('aria-pressed',String(family===state.filter));b.querySelector('span').textContent=STARTERS.filter(x=>family==='all'||family==='general'&&['csg','transport'].includes(x.family)||family==='reactors'&&['components','architectures'].includes(x.family)||x.family===family).length;});
  const query=$('search').value.toLowerCase(),list=STARTERS.filter(x=>(state.filter==='all'||state.filter==='general'&&['csg','transport'].includes(x.family)||state.filter==='reactors'&&['components','architectures'].includes(x.family)||x.family===state.filter)&&x.name.toLowerCase().includes(query));
- $('models').innerHTML=list.map(x=>'<button class="model-card" data-open="'+x.id+'"><span class="art">'+art(x.id)+'</span><span class="card-name"><span>'+esc(x.name)+'</span>'+(x.family==='architectures'?'<span class="generic">Generic</span>':'<span class="arrow" aria-hidden="true">↗</span>')+'</span></button>').join('')||'<div class="hint">No matching models. <button id="clear-search" class="button">Clear search</button></div>';
+ $('models').innerHTML=(query? '':pdfCard)+(list.map(x=>'<button class="model-card" data-open="'+x.id+'"><span class="art">'+art(x.id)+'</span><span class="card-name"><span>'+esc(x.name)+'</span>'+(x.family==='architectures'?'<span class="generic">Generic</span>':'<span class="arrow" aria-hidden="true">↗</span>')+'</span></button>').join('')||'<div class="hint">No matching models. <button id="clear-search" class="button">Clear search</button></div>');
  $('recent').innerHTML=state.documents[0]?'<button data-recent="'+esc(state.documents[0].id)+'">↶ '+esc(state.documents[0].name)+'</button>':'';
  $('category-title').textContent={all:'All examples',general:'CSG and transport',reactors:'Reactors',components:'Components',benchmarks:'Benchmarks',architectures:'Reactors'}[state.filter];
 }
@@ -297,5 +298,6 @@ if(navigator.modelContext?.registerTool){
 }
 const construction=installConstruction({state,mutate,selected,select,notice,openModel,save,renderEditor,finishTransaction,art});
 installPreferences();
+installPDFImport({openModel});
 installApp();
 renderLibrary();
