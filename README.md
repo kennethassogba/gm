@@ -2,6 +2,12 @@
 
 [Open the studio](https://gm.keff.uk) - [k_eff](https://keff.uk)
 
+<p>
+  <img src="docs/images/drill-in-3d.webp" width="32%" alt="GM: drill a solid in 3D">
+  <img src="docs/images/repeated-geometry.webp" width="32%" alt="GM: repeat geometry with OpenMC universes and lattices">
+  <img src="docs/images/cuts-and-sections.webp" width="32%" alt="GM: inspect 3D cuts and sections">
+</p>
+
 GM is an experiment in building OpenMC geometry in the browser. The goal is a small CAD workspace for creating solids, combining CSG regions, inspecting sections and exporting editable OpenMC models.
 
 Start empty or use one of 21 editable examples covering CSG, shielding, detectors and reactors. Move, duplicate and combine cells, edit materials, and build nested universes and lattices. Use **From PDF** to build a draft from a specification or benchmark. Choose a case, inspect the section preview and review extraction notes before opening the model. Missing essential dimensions are requested instead of filled in. Models autosave in your browser. Install the app for offline editing.
