@@ -1,4 +1,6 @@
 import {generalArt} from './example-art.js';
+import {installAssistant} from './assistant-ui.js';
+import {installApp} from './install.js';
 import {STARTERS,createEmptyModel,createModelForTemplate,addPrimitive,addComponent,translateCell,updateLatticePitch,nextId,cloneOccurrence,exportGeometryXML,exportMaterialsXML,exportPython,importGeometryXML,validateModel} from './model.js';
 import {parseRegion} from './csg.js';
 import {GeometryViewer} from './viewer.js';
@@ -294,4 +296,10 @@ if(navigator.modelContext?.registerTool){
  ])navigator.modelContext.registerTool(tool);
 }
 const construction=installConstruction({state,mutate,selected,select,notice,openModel,save,renderEditor,finishTransaction,art});
+installAssistant({getModel:()=>state.model,prepareModel:()=>{
+ const draft=structuredClone(state.model);
+ if(state.scope==='occurrence'&&state.occurrence?.path?.length&&state.clonedOccurrence!==draft.selection?.id){const result=cloneOccurrence(draft,state.occurrence.path,draft.selection.id);draft.selection.id=result.cellId;draft.focus={universe:draft.cells.find(c=>c.id===result.cellId).universe,path:result.path};}
+ return draft;
+},ensureModel:()=>{if(!state.model||state.page!=='editor')openModel(createEmptyModel());},applyModel:model=>{finishTransaction();state.multi=[];state.occurrence=null;state.scope='shared';mutate(m=>Object.assign(m,normalize(model)),{fit:true});},undo,notice});
+installApp();
 renderLibrary();
