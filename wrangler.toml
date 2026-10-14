@@ -10,13 +10,12 @@ run_worker_first = ["/api/*"]
 [previews]
 
 [vars]
-AI_DAILY_SERVICE_USD = "20"
 MAILING_LIST_ENABLED = "true"
 
 [[durable_objects.bindings]]
-name = "ASSISTANT_LEDGER"
-class_name = "AssistantLedger"
+name = "SUBSCRIPTIONS"
+class_name = "SubscriptionStore"
 
-[[migrations]]
-tag = "assistant-v1"
-new_sqlite_classes = ["AssistantLedger"]
+[exports.SubscriptionStore]
+type = "durable-object"
+storage = "sqlite"

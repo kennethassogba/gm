@@ -14,5 +14,3 @@ WebMCP tools: geometry_construct, geometry_catalog, geometry_open, geometry_get,
 HTTP tools: geometry.empty, geometry.construct, catalog.list, geometry.template, geometry.focus, geometry.set_surface, geometry.validate, geometry.export.
 
 Example materials are illustrative. Benchmark adaptations retain source and simplification metadata. GM does not run transport. Complex Boolean 3D meshes are approximations; sections and XML use canonical regions.
-
-The optional assistant sends explicit user prompts, up to 12 recent chat messages and model documents to /api/assistant. OpenAI receives the recent conversation and a geometry summary, and returns a reply or a constrained construction plan. Chat history is stored locally in the browser and can be cleared. The server validates and applies it to a copy of the canonical document. Budgets are server enforced. Manual editing stays local.

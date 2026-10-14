@@ -1,12 +1,13 @@
-import { onRequest } from "../functions/api/mcp.js";
-import {assistantRequest} from './assistant.js';
-export {AssistantLedger} from './assistant.js';
+import {onRequest} from '../functions/api/mcp.js';
+import {subscriptionRequest} from './subscriptions.js';
+export {SubscriptionStore} from './subscriptions.js';
 
 export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    if(url.pathname.startsWith('/api/assistant'))return assistantRequest(request,env);
-    if (url.pathname === "/api/mcp") return onRequest({ request, env });
+  async fetch(request,env){
+    const {pathname}=new URL(request.url);
+    if(pathname==='/api/mcp')return onRequest({request,env});
+    if(['/api/preferences','/api/subscribe','/api/subscribers'].includes(pathname))return subscriptionRequest(request,env);
+    if(pathname.startsWith('/api/'))return Response.json({error:'Not found.'},{status:404});
     return env.ASSETS.fetch(request);
   }
 };

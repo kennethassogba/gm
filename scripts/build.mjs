@@ -15,7 +15,7 @@ await mkdir(path.join(output, "api"), { recursive: true });
 const catalog = {
   name: "GM Studio model catalog",
   version: "0.4.0",
-  localDataPolicy: "Model documents stay in the browser unless you export, send an assistant request, or provide them to an agent tool.",
+  localDataPolicy: "Model documents stay in the browser unless you export or provide them to an agent tool.",
   entries: STARTERS.map(({ id, name, family, kind, status, subtitle, source, version, href, sourceNote, simplification, note }) => ({
     id, name, family, kind, status, subtitle,
     ...(source ? { source, version, href, sourceNote, simplification } : { note })

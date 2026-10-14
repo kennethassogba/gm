@@ -1,5 +1,5 @@
 import {generalArt} from './example-art.js';
-import {installAssistant} from './assistant-ui.js';
+import {installPreferences} from './preferences.js';
 import {installApp} from './install.js';
 import {STARTERS,createEmptyModel,createModelForTemplate,addPrimitive,addComponent,translateCell,updateLatticePitch,nextId,cloneOccurrence,exportGeometryXML,exportMaterialsXML,exportPython,importGeometryXML,validateModel} from './model.js';
 import {parseRegion} from './csg.js';
@@ -296,12 +296,6 @@ if(navigator.modelContext?.registerTool){
  ])navigator.modelContext.registerTool(tool);
 }
 const construction=installConstruction({state,mutate,selected,select,notice,openModel,save,renderEditor,finishTransaction,art});
-let assistantDraft=createEmptyModel();
-installAssistant({getModel:()=>state.page==='editor'?state.model:assistantDraft,prepareModel:()=>{
- if(state.page!=='editor')return structuredClone(assistantDraft);
- const draft=structuredClone(state.model);
- if(state.scope==='occurrence'&&state.occurrence?.path?.length&&state.clonedOccurrence!==draft.selection?.id){const result=cloneOccurrence(draft,state.occurrence.path,draft.selection.id);draft.selection.id=result.cellId;draft.focus={universe:draft.cells.find(c=>c.id===result.cellId).universe,path:result.path};}
- return draft;
-},applyModel:model=>{if(state.page!=='editor'){const empty=structuredClone(assistantDraft);openModel(model);state.undo.push(empty);updateHistory();assistantDraft=createEmptyModel();return;}finishTransaction();state.multi=[];state.occurrence=null;state.scope='shared';mutate(m=>Object.assign(m,normalize(model)),{fit:true});document.title=plainLabel(state.model.name)+' - GM';},undo,notice});
+installPreferences();
 installApp();
 renderLibrary();
