@@ -1,5 +1,5 @@
 import {pdfImportRequest} from './pdf-import.js';
-export {PDFImportLimits} from './pdf-import.js';
+export {PDFImportLimits,PDFImportJob} from './pdf-import.js';
 import {onRequest} from '../functions/api/mcp.js';
 import {subscriptionRequest} from './subscriptions.js';
 export {SubscriptionStore} from './subscriptions.js';

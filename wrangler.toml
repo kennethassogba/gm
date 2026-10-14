@@ -28,5 +28,10 @@ class_name = "PDFImportLimits"
 type = "durable-object"
 storage = "sqlite"
 
-[limits]
-cpu_ms = 30000
+[[durable_objects.bindings]]
+name = "PDF_IMPORT_JOBS"
+class_name = "PDFImportJob"
+
+[exports.PDFImportJob]
+type = "durable-object"
+storage = "sqlite"

@@ -58,7 +58,7 @@ async function readPDF(request){
  return bytes;
 }
 function base64(bytes){let text='';for(let i=0;i<bytes.length;i+=32768)text+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(text);}
-export async function pdfImportRequest(request,env){
+async function convertPDFRequest(request,env){
  let ticket=null,call,cost=null;
  try{
   const url=new URL(request.url),secure=url.protocol==='https:',cookieName=secure?'__Host-gm_pdf':'gm_pdf';
@@ -74,7 +74,7 @@ export async function pdfImportRequest(request,env){
   let name,hint;try{name=decodeURIComponent(request.headers.get('x-pdf-name')||'Specification.pdf').slice(0,180);hint=decodeURIComponent(request.headers.get('x-pdf-case')||'');}catch{throw fail('Choose the file again.');}
   if(hint.length>1500)throw fail('Keep the case description under 1,500 characters.');
   // Hash the edge-provided address with a secret and daily salt. Raw addresses are not stored.
-  const ipBytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(env.OPENAI_API_KEY+day()+(request.headers.get('cf-connecting-ip')||'local')));
+  const ipBytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(env.OPENAI_API_KEY+day()+(request.headers.get('x-gm-client')||'local')));
   const ip=Array.from(new Uint8Array(ipBytes),b=>b.toString(16).padStart(2,'0')).join('');
   ({ticket}=await call('reserve',{id,ip}));cost=0;
   const bytes=await readPDF(request);let pages;
@@ -97,4 +97,18 @@ export async function pdfImportRequest(request,env){
   return json(built);
  }catch(error){return json({error:error.status?error.message:'The import stopped. Try again, or choose fewer pages.'},error.status||503);}
  finally{if(ticket&&call)await call('settle',{ticket,cost}).catch(()=>{});}
+}
+
+// PDF parsing and geometry construction run in a dedicated object so they do
+// not consume the static gateway's short request CPU allowance. No job is stored.
+export class PDFImportJob {
+ constructor(ctx,env){this.env=env;}
+ fetch(request){return convertPDFRequest(request,this.env);}
+}
+export async function pdfImportRequest(request,env){
+ if(!env.PDF_IMPORT_JOBS)return json({error:'PDF import is temporarily unavailable. Try again later.'},503);
+ const cookie=(request.headers.get('cookie')||'').match(/(?:^|;\s*)(?:__Host-)?gm_pdf=([a-f0-9-]{36})(?:;|$)/)?.[1];
+ const headers=new Headers(request.headers);headers.set('x-gm-client',request.headers.get('cf-connecting-ip')||'local');
+ try{return await env.PDF_IMPORT_JOBS.get(env.PDF_IMPORT_JOBS.idFromName(cookie||crypto.randomUUID())).fetch(new Request(request,{headers}));}
+ catch{return json({error:'The document could not be processed. Try a smaller PDF or fewer pages.'},503);}
 }
