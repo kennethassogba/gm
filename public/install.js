@@ -21,6 +21,21 @@ export function installApp(){
   $('install-app').onclick=open;$('install-nudge-button').onclick=open;$('install-close').onclick=()=>$('install-dialog').close();
   if(installed()){$('install-app').textContent='Installed';$('install-app').disabled=true;}
   if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
-  const resize=()=>document.documentElement.style.setProperty('--workspace-height',(window.visualViewport?.scale===1?window.visualViewport.height:window.innerHeight)+'px');
-  window.visualViewport?.addEventListener('resize',resize);resize();
+  // Safari pans the visual viewport for the keyboard. Track its offset as well
+  // as its height, and keep pinch zoom under the browser's control.
+  const viewport=window.visualViewport,shell=document.querySelector('.shell');
+  let fullHeight=window.innerHeight,frame=0;
+  const resize=()=>{
+    cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{
+      if(viewport&&Math.abs(viewport.scale-1)>.05)return;
+      const height=viewport?.height||window.innerHeight;
+      const editing=!!document.activeElement?.closest('#assistant-form');
+      if(!editing)fullHeight=window.innerHeight;
+      document.documentElement.style.setProperty('--workspace-height',height+'px');
+      document.documentElement.style.setProperty('--workspace-top',(viewport?.offsetTop||0)+'px');
+      shell.classList.toggle('keyboard-open',editing&&fullHeight-height>120);
+    });
+  };
+  viewport?.addEventListener('resize',resize);viewport?.addEventListener('scroll',resize);
+  addEventListener('resize',resize);document.addEventListener('focusin',resize);document.addEventListener('focusout',resize);resize();
 }

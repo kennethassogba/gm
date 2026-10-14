@@ -4,7 +4,7 @@
 
 GM is an experiment in building OpenMC geometry directly in the browser. The aim is to make CSG construction as direct as a small CAD tool: create solids, combine them, inspect sections and export a model you can keep editing in OpenMC.
 
-Start empty or open one of 21 editable examples covering CSG, shielding, detectors and reactors. Select a cell to change its dimensions, move it, duplicate it or combine it with another. The optional assistant accepts a description of the geometry. Every generated edit can be undone.
+Start empty or open one of 21 editable examples covering CSG, shielding, detectors and reactors. Select a cell to change its dimensions, move it, duplicate it or combine it with another. The optional assistant is available from the home screen. Describe geometry, answer its follow-up questions, or ask for an explanation. Every generated edit can be undone.
 
 ## How it works
 
@@ -39,7 +39,7 @@ The static server prints its address. To use the assistant API locally, copy `.d
 
 The assistant uses an HttpOnly browser cookie and a server ledger to enforce **$0.50 per UTC day**, shared across tabs. Preferences shows estimated spend. The service-wide cap defaults to $20/day. Clearing cookies creates a new browser identity.
 
-Prompts and model documents reach the GM Worker only on Send; OpenAI receives a geometry summary. GM stores usage totals, not prompts or models. Responses uses `store: false`; [OpenAI API data policies](https://developers.openai.com/api/docs/guides/your-data) still apply. Hide disables the assistant. Manual editing stays local.
+Chat history stays in your browser and can be cleared. On Send, the GM Worker receives your prompt, recent messages and model; OpenAI receives the conversation and a geometry summary. The server stores usage totals, not conversations or models. Responses uses `store: false`; [OpenAI API data policies](https://developers.openai.com/api/docs/guides/your-data) still apply. Hide disables the assistant. Manual editing stays local.
 
 ## Deploy and contribute
 

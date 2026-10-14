@@ -2,12 +2,12 @@
 
 ## Request path
 
-1. The browser sends a prompt and the current JSON model to `/api/assistant` only on Send.
+1. The browser sends a prompt, up to 12 recent messages (30 KB), and the current JSON model to `/api/assistant` only on Send.
 2. The Worker checks origin, request size, structural validity and model size.
 3. A SQLite Durable Object atomically reserves the maximum estimated call cost against the browser's UTC day and the service's UTC day. One active request per browser is allowed.
 4. OpenAI `/v1/decisions` (`gpt-6-luna`) classifies complexity. `/v1/responses` uses the same low-cost model with low or medium reasoning, a strict schema, no external tools, `store:false` and an output token cap.
 5. The Worker independently validates the plan, resolves step references, runs the existing builders and checks each intermediate document. No generated code is executed.
-6. The result is a complete canonical JSON model. The browser loads it as one undoable edit only if the original geometry has not changed. Otherwise it offers the JSON as a download.
+6. The result is a conversational reply, a clarification question, or a complete canonical JSON model. The browser loads it as one undoable edit only if the original geometry has not changed. Otherwise it offers the JSON as a download.
 
 The assistant supports primitive cells, Boolean combinations, moves, rotations, arrays, duplication, deletion, grouping, pins, lattices and placements. Its schema excludes arbitrary code, material composition generation and raw XML.
 
@@ -28,6 +28,8 @@ Sources: [Decisions](https://developers.openai.com/api/docs/guides/decisions), [
 Recheck rates before changing the model, endpoint, tier or token cap. The default shared daily cap is $20 and can be changed through `AI_DAILY_SERVICE_USD` in `wrangler.toml`. Infrastructure charges are separate from the API allowance.
 
 ## Stored data
+
+The browser keeps the latest 60 chat messages in local storage. The history button opens the conversation; Clear history removes it after confirmation. Only the most recent 12 messages fitting within 30 KB accompany a request. The full history is never uploaded. The assistant is available from the library with an empty draft; a new geometry opens only when a construction plan is applied.
 
 `AssistantLedger`, singleton `gm-v1`, stores browser identity expiry, daily usage, reservations and optional subscriptions. Prompts, model documents and OpenAI credentials are not persisted. Old usage and reservation records are removed by a daily alarm after two days; browser identities expire after 30 days.
 
