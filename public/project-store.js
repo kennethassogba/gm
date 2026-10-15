@@ -1,5 +1,10 @@
 // Models and the small project index commit together. Listing projects never
 // loads every geometry, and saving one project never rewrites another one.
+export async function geometryPreviewKey(model){
+ const source=JSON.stringify([model.surfaces,model.cells,model.materials,model.universes,model.lattices,model.rootUniverse??0,!!model.cutaway]);
+ const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(source));
+ return Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join('');
+}
 export class ProjectStore{
  constructor(factory=globalThis.indexedDB){
   this.revisions=new Map();this.queue=Promise.resolve();
@@ -48,16 +53,35 @@ export class ProjectStore{
  put(model){
   const snapshot=structuredClone(model);
   return this.write(async()=>{
+   const previewKey=await geometryPreviewKey(snapshot);
    const metadata=await this.transaction('readwrite',(s,done,abort)=>{
     const request=s.projects.get(snapshot.id);request.onsuccess=()=>{
      const old=request.result;
      if(old&&(this.revisions.get(snapshot.id)??0)!==old.revision){abort(new Error('This project changed in another tab. Duplicate it to keep your edits.'));return;}
-     const now=Date.now(),next={id:snapshot.id,name:snapshot.name,createdAt:old?.createdAt??now,updatedAt:now,revision:(old?.revision??0)+1,...(old?.deletedAt?{deletedAt:old.deletedAt}:{})};
+     const now=Date.now(),next={id:snapshot.id,name:snapshot.name,createdAt:old?.createdAt??now,updatedAt:now,revision:(old?.revision??0)+1,previewKey,...(old?.previewKey===previewKey&&old.thumbnail?{thumbnail:old.thumbnail}:{}),...(old?.deletedAt?{deletedAt:old.deletedAt}:{})};
      s.projects.put(next);s.documents.put({id:snapshot.id,model:snapshot});done(next);
     };
    });
    this.revisions.set(snapshot.id,metadata.revision);return metadata;
   });
+ }
+ async getPreviewSource(id){
+  // Reading for a background preview must not adopt a newer edit revision:
+  // that would let a stale editing tab overwrite another tab's changes.
+  return this.transaction('readonly',(s,done)=>{
+   let project,model;const metadata=s.projects.get(id),document=s.documents.get(id);
+   const finish=()=>{if(project&&model)done({project,model});};
+   metadata.onsuccess=()=>{project=metadata.result;finish();};document.onsuccess=()=>{model=document.result?.model;finish();};
+  });
+ }
+ setThumbnail(id,{key,revision,thumbnail}){
+  return this.write(()=>this.transaction('readwrite',(s,done,abort)=>{
+   if(thumbnail.url&&(!/^data:image\/(webp|png);base64,[A-Za-z0-9+/=]+$/.test(thumbnail.url)||thumbnail.url.length>180000)){abort(new Error('Invalid project preview.'));return;}
+   const request=s.projects.get(id);request.onsuccess=()=>{
+    const old=request.result;if(!old||(old.previewKey?old.previewKey!==key:old.revision!==revision)){done(null);return;}
+    const next={...old,previewKey:key,thumbnail:{...thumbnail,key}};s.projects.put(next);done(next);
+   };
+  }));
  }
  setDeleted(id,deleted){
   return this.write(async()=>{

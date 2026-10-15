@@ -65,6 +65,7 @@ function renderLibrary(){
  const query=$('search').value.toLowerCase(),list=STARTERS.filter(x=>(state.filter==='all'||state.filter==='general'&&['csg','transport'].includes(x.family)||state.filter==='reactors'&&['components','architectures'].includes(x.family)||x.family===state.filter)&&x.name.toLowerCase().includes(query));
  $('models').innerHTML=['projects','trash'].includes(state.filter)?projectsUI.renderGrid(state.filter==='trash',query):(query? '':pdfCard)+(list.map(x=>'<button class="model-card" data-open="'+x.id+'"><span class="art">'+art(x.id)+'</span><span class="card-name"><span>'+esc(x.name)+'</span>'+(x.family==='architectures'?'<span class="generic">Generic</span>':'<span class="arrow" aria-hidden="true">↗</span>')+'</span></button>').join('')||'<div class="hint">No matching models. <button id="clear-search" class="button">Clear search</button></div>');
  projectsUI?.renderSidebar();
+ projectsUI?.observePreviews();
  $('category-title').textContent={projects:'Your projects',trash:'Trash',all:'All examples',general:'CSG and transport',reactors:'Reactors',components:'Components',benchmarks:'Benchmarks',architectures:'Reactors'}[state.filter];
 }
 function selected(){const s=state.model?.selection;return s?state.model[{cell:'cells',surface:'surfaces',universe:'universes',lattice:'lattices',material:'materials'}[s.kind]]?.find(x=>x.id===s.id):null;}

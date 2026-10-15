@@ -6,6 +6,7 @@ export function createContextMenu(onError){
   close();trigger=anchor;menu.setAttribute('aria-label',label);
   for(const item of items){if(!item){const hr=document.createElement('hr');hr.setAttribute('role','separator');menu.append(hr);continue;}
    const button=document.createElement('button');button.type='button';button.setAttribute('role','menuitem');button.textContent=item.label;button.disabled=!!item.disabled;button.classList.toggle('danger',!!item.danger);button.tabIndex=-1;
+   if(item.current)button.setAttribute('aria-current','page');
    if(item.shortcut){const hint=document.createElement('kbd');hint.textContent=item.shortcut;hint.setAttribute('aria-hidden','true');button.append(hint);}
    button.onclick=()=>{close(true);Promise.resolve().then(item.run).catch(error=>onError(error.message));};menu.append(button);
   }
