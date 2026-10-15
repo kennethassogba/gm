@@ -1,7 +1,7 @@
 import {PDFDocument} from 'pdf-lib';
 import {PDF_PLAN_SCHEMA,PDF_INSTRUCTIONS,buildPDFModel} from './pdf-plan.js';
 
-const MAX_BYTES=15*1024*1024,MAX_PAGES=100,RESERVE=.4,MODEL='gpt-5.4-mini';
+const MAX_BYTES=15*1024*1024,MAX_PAGES=200,DAILY_PDFS=2,RESERVE=.4,MODEL='gpt-5.4-mini';
 const json=(data,status=200,headers={})=>Response.json(data,{status,headers:{'cache-control':'no-store','x-content-type-options':'nosniff',...headers}});
 const fail=(message,status=400)=>Object.assign(new Error(message),{status});
 const day=()=>new Date().toISOString().slice(0,10);
@@ -20,10 +20,11 @@ export class PDFImportLimits {
    if(action==='reserve'){
     if(!((await tx.get('s:'+arg.id))?.expires>Date.now())||!arg.ip)return json({error:'Reopen the PDF importer and try again.'},401);
     const keys=['d:'+day()+':browser:'+arg.id,'d:'+day()+':network:'+arg.ip,'d:'+day()+':service'];
-    const caps=[{cost:2,count:20,active:1},{cost:6,count:60,active:3},{cost:20,count:200,active:8}];
+    const caps=[{cost:2,count:DAILY_PDFS,active:1},{cost:6,count:60,active:3},{cost:20,count:200,active:8}];
     const rows=await Promise.all(keys.map(async key=>await tx.get(key)||{cost:0,count:0,active:[]}));
     for(let i=0;i<rows.length;i++){
      rows[i].active=rows[i].active.filter(r=>r.until>Date.now());
+     if(i===0&&rows[i].count>=DAILY_PDFS)return json({error:'You have reached 2 PDF imports today. Try again tomorrow or visit keff.uk for more.'},429);
      if(rows[i].active.length>=caps[i].active)return json({error:'An import is already running. Try again in a few minutes.'},429);
      if(rows[i].cost+RESERVE>caps[i].cost||rows[i].count>=caps[i].count)return json({error:'PDF imports are paused for today. Try again tomorrow.'},429);
     }
@@ -34,7 +35,7 @@ export class PDFImportLimits {
    if(action==='settle'){
     const reservation=await tx.get('r:'+arg.ticket);if(!reservation)return json({ok:true});
     const cost=Number.isFinite(arg.cost)&&arg.cost>=0?arg.cost:RESERVE;
-    for(const key of reservation.keys){const row=await tx.get(key);if(row){row.cost=Math.max(0,row.cost-RESERVE+cost);row.active=row.active.filter(r=>r.ticket!==arg.ticket);await tx.put(key,row);}}
+    for(const key of reservation.keys){const row=await tx.get(key);if(row){row.cost=Math.max(0,row.cost-RESERVE+cost);if(arg.consume===false)row.count=Math.max(0,row.count-1);row.active=row.active.filter(r=>r.ticket!==arg.ticket);await tx.put(key,row);}}
     await tx.delete('r:'+arg.ticket);return json({ok:true});
    }
    return json({error:'Not found.'},404);
@@ -59,7 +60,7 @@ async function readPDF(request){
 }
 function base64(bytes){let text='';for(let i=0;i<bytes.length;i+=32768)text+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(text);}
 async function convertPDFRequest(request,env){
- let ticket=null,call,cost=null;
+ let ticket=null,call,cost=null,consume=false;
  try{
   const url=new URL(request.url),secure=url.protocol==='https:',cookieName=secure?'__Host-gm_pdf':'gm_pdf';
   if(!['GET','POST'].includes(request.method))throw fail('Method not allowed.',405);
@@ -79,12 +80,13 @@ async function convertPDFRequest(request,env){
   ({ticket}=await call('reserve',{id,ip}));cost=0;
   const bytes=await readPDF(request);let pages;
   try{pages=(await PDFDocument.load(bytes,{updateMetadata:false,throwOnInvalidObject:true})).getPageCount();}catch{throw fail('This PDF could not be read. Export an unlocked PDF and try again.');}
-  if(!pages||pages>MAX_PAGES)throw fail('Export up to 100 relevant pages and try again.',413);
+  if(!pages||pages>MAX_PAGES)throw fail('Choose a PDF with up to 200 pages. For larger documents, visit keff.uk.',413);
   const payload={model:MODEL,store:false,reasoning:{effort:'medium'},max_output_tokens:16000,
    instructions:PDF_INSTRUCTIONS,
    input:[{role:'user',content:[{type:'input_file',filename:'specification.pdf',file_data:'data:application/pdf;base64,'+base64(bytes)},{type:'input_text',text:`PDF has ${pages} pages. Requested case or additional dimensions: ${hint||'Choose the principal geometry if unambiguous.'}`}]}],
    text:{format:{type:'json_schema',name:'pdf_geometry',strict:true,schema:PDF_PLAN_SCHEMA}}};
   cost=null; // Unknown provider outcome keeps the conservative reservation.
+  consume=true;
   const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{authorization:'Bearer '+env.OPENAI_API_KEY,'content-type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(170000)});
   const result=await response.json();
   if(result.usage)cost=(result.usage.input_tokens*.75+result.usage.output_tokens*4.5)/1000000;
@@ -96,7 +98,7 @@ async function convertPDFRequest(request,env){
   let built;try{built=buildPDFModel(plan,{name,pages,case:hint});}catch(error){throw fail(error.message,422);}
   return json(built);
  }catch(error){return json({error:error.status?error.message:'The import stopped. Try again, or choose fewer pages.'},error.status||503);}
- finally{if(ticket&&call)await call('settle',{ticket,cost}).catch(()=>{});}
+ finally{if(ticket&&call)await call('settle',{ticket,cost,consume}).catch(()=>{});}
 }
 
 // PDF parsing and geometry construction run in a dedicated object so they do
