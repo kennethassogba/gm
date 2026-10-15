@@ -18,7 +18,7 @@
 <div class="shell">
 <header class="header">
  <button id="home" class="brand" aria-label="Open model library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 9 5v10l-9 5-9-5V7zM3 7l9 5 9-5M12 12v10"/></svg><span>gm</span></button>
- <span class="header-divider"></span><button id="model-name" class="name-button">Models</button><span id="saved" class="saved" role="status"></span>
+ <span class="header-divider"></span><button id="model-name" class="name-button" aria-haspopup="menu" title="Project actions">Models</button><span id="saved" class="saved" role="status"></span>
  <div class="header-actions">
   <button id="command" class="icon" aria-label="Open commands" title="Commands (Ctrl+K)"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg></button>
   <button id="undo" class="icon" aria-label="Undo" title="Undo (Ctrl+Z)" disabled><svg viewBox="0 0 24 24"><path d="m8 5-5 5 5 5M3 10h10a7 7 0 0 1 0 14"/></svg></button>
@@ -30,7 +30,7 @@
 </header>
 <main id="main" tabindex="-1">
  <section id="library" class="library">
-  <nav class="library-nav" aria-label="Model categories"><h1 tabindex="-1">Geometry</h1><button id="empty" class="button primary">+ New geometry</button><button data-filter="general" aria-pressed="true">CSG and transport <span>8</span></button><button data-filter="reactors" aria-pressed="false">Reactors <span>9</span></button><button data-filter="benchmarks" aria-pressed="false">Benchmarks <span>4</span></button><button data-filter="all" aria-pressed="false">All examples <span>21</span></button><div id="recent"></div><button id="library-help" class="subtle">Make your first cut</button><button data-show-recipes class="subtle">Build an example</button></nav>
+  <nav class="library-nav" aria-label="Model categories"><h1 tabindex="-1">Geometry</h1><button id="empty" class="button primary">+ New geometry</button><button data-filter="projects" aria-pressed="false">Your projects <span>0</span></button><button data-filter="general" aria-pressed="true">CSG and transport <span>8</span></button><button data-filter="reactors" aria-pressed="false">Reactors <span>9</span></button><button data-filter="benchmarks" aria-pressed="false">Benchmarks <span>4</span></button><button data-filter="all" aria-pressed="false">All examples <span>21</span></button><div id="recent"></div><button id="library-help" class="subtle">Make your first cut</button><button data-show-recipes class="subtle">Build an example</button></nav>
   <div class="library-content"><div class="library-toolbar"><h2 id="category-title">CSG and transport</h2><label class="search"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search" type="search" aria-label="Search models" placeholder="Search geometry"></label></div><div id="models" class="model-grid"></div></div>
  </section>
  <section id="editor" class="editor" hidden>
@@ -69,6 +69,9 @@
 </dialog>
 <aside id="install-nudge" class="install-nudge" aria-label="Install GM" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5"/></svg><button id="install-nudge-button">Install GM</button><button id="install-dismiss" class="icon" aria-label="Dismiss install suggestion">&times;</button></aside>
 <dialog id="install-dialog" class="install-dialog" aria-labelledby="install-title"><div class="dialog-heading"><h2 id="install-title">Install GM</h2><button id="install-close" class="icon" aria-label="Close installation instructions">&times;</button></div><p id="install-instructions"></p><p class="muted">The geometry editor works offline after the first visit.</p></dialog>
+<dialog id="rename-project-dialog" aria-labelledby="rename-project-title">
+ <form id="rename-project-form"><div class="dialog-heading"><h2 id="rename-project-title">Rename project</h2><button type="button" class="icon" data-close aria-label="Close rename project">&times;</button></div><label class="field" for="project-name-input">Project name<input id="project-name-input" name="project-name" maxlength="180" autocomplete="off" required aria-describedby="project-name-error"></label><p id="project-name-error" class="validation-error" role="status"></p><div class="project-dialog-actions"><button type="button" class="button" data-close>Cancel</button><button id="project-name-save" class="button primary" type="submit">Save</button></div></form>
+</dialog>
 <dialog id="pdf-dialog" class="pdf-dialog" aria-labelledby="pdf-title">
  <div class="dialog-heading"><h2 id="pdf-title">From PDF</h2><button id="pdf-close" class="icon" aria-label="Close PDF import">&times;</button></div>
  <form id="pdf-form">

@@ -237,7 +237,7 @@ export function installConstruction(api){
   if(b.dataset.diagnosticCells){state.multi=b.dataset.diagnosticCells.split(',').map(Number);state.model.selection={kind:'cell',id:state.multi[0]};$('message-dialog').close();renderEditor();}
  });
  document.addEventListener('keydown',e=>{
-  if(e.target.matches('input,textarea,select')||document.querySelector('dialog[open]')||state.page!=='editor')return;
+  if(e.defaultPrevented||e.target.closest('[role=menu]')||e.target.matches('input,textarea,select')||document.querySelector('dialog[open]')||state.page!=='editor')return;
   if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();runAction('delete');}
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='d'){e.preventDefault();runAction('duplicate');}
   if(e.key.toLowerCase()==='m')runAction('move');

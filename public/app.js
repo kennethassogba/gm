@@ -1,4 +1,8 @@
 import {installPDFImport,pdfCard} from './pdf-import-ui.js';
+import {ProjectStore} from './project-store.js';
+import {installProjects} from './projects-ui.js';
+import {createContextMenu} from './context-menu.js';
+import {installWorkspaceMenus} from './workspace-menus.js';
 import {generalArt} from './example-art.js';
 import {installPreferences} from './preferences.js';
 import {installApp} from './install.js';
@@ -9,14 +13,22 @@ import {installConstruction} from './construction-ui.js';
 import {syncDomains,canContain,constructGeometry} from './builder.js';
 const $=id=>document.getElementById(id),plainLabel=v=>String(v??'').replace(/[\u00b7\u2013\u2014]/g,'-'),esc=v=>plainLabel(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const state={model:null,page:'library',filter:'general',undo:[],redo:[],transaction:null,scope:'shared',occurrence:null,paint:null,selectedSurfaces:[],documents:[],viewer:null,renderPending:false,measure:null};
-const STORAGE='gm.documents.v2';
-try{state.documents=JSON.parse(localStorage.getItem(STORAGE)||'[]');const old=localStorage.getItem('gm.studio.model.v1');if(!state.documents.length&&old)state.documents.push(JSON.parse(old));}catch{notice('Local storage unavailable. Export a copy before closing.');}
+const projectStore=new ProjectStore(),pendingProjects=new Map();let projectsUI,saveSerial=0;
 function notice(text){$('notice').querySelector('span').textContent=text;$('notice').classList.add('visible');}
 $('dismiss-notice').onclick=()=>$('notice').classList.remove('visible');
-function save(){if(!state.model)return;const i=state.documents.findIndex(x=>x.id===state.model.id);if(i<0)state.documents.unshift(structuredClone(state.model));else state.documents[i]=structuredClone(state.model);state.documents=state.documents.slice(0,15);try{localStorage.setItem(STORAGE,JSON.stringify(state.documents));$('saved').textContent='Saved';updateHistory();}catch{$('saved').textContent='Not saved';notice('Export a copy: this browser could not save the model.');}}
+function save(model=state.model){
+ if(!model)return Promise.resolve();const snapshot=structuredClone(model),id=model.id,serial=++saveSerial,index=state.documents.findIndex(p=>p.id===id),previous=state.documents[index];
+ const metadata={...previous,id,name:model.name,createdAt:previous?.createdAt??Date.now(),updatedAt:Date.now()};if(index<0)state.documents.unshift(metadata);else state.documents[index]=metadata;
+ if(state.model?.id===id&&state.page==='editor')$('saved').textContent='Saving...';updateHistory();
+ const promise=projectStore.put(snapshot);pendingProjects.set(id,{model:snapshot,serial,promise});
+ promise.then(metadata=>{if(pendingProjects.get(id)?.serial!==serial)return;pendingProjects.delete(id);const i=state.documents.findIndex(p=>p.id===id);if(i>=0)state.documents[i]=metadata;if(state.model?.id===id&&state.page==='editor')$('saved').textContent='Saved';if(state.page==='library')renderLibrary();})
+ .catch(error=>{if(pendingProjects.get(id)?.serial!==serial)return;if(state.model?.id===id&&state.page==='editor')$('saved').textContent='Not saved';notice(error.message+' Export or duplicate a copy before closing.');});
+ return promise;
+}
+window.addEventListener('beforeunload',event=>{if(pendingProjects.size){event.preventDefault();event.returnValue='';}});
 function history(){state.undo.push(structuredClone(state.model));if(state.undo.length>60)state.undo.shift();state.redo=[];updateHistory();}
 function updateHistory(){$('undo').disabled=!(state.undo.length||(state.transaction&&JSON.stringify(state.transaction)!==JSON.stringify(state.model)));$('redo').disabled=!state.redo.length;}
-function redraw(fit=false){if(state.renderPending&&!fit)return;state.renderPending=true;requestAnimationFrame(()=>{state.renderPending=false;try{state.model.selectedIds=state.multi||[];state.viewer?.update(state.model,{fit});}catch(error){notice(error.message+' Undo the last change or edit the region.');}});}
+function redraw(fit=false){if(!state.model||state.page!=='editor')return;if(state.renderPending&&!fit)return;state.renderPending=true;requestAnimationFrame(()=>{state.renderPending=false;if(!state.model||state.page!=='editor')return;try{state.model.selectedIds=state.multi||[];state.viewer?.update(state.model,{fit});}catch(error){notice(error.message+' Undo the last change or edit the region.');}});}
 function mutate(fn,{record=true,ui=true,fit=false}={}){const before=structuredClone(state.model);try{fn(state.model);syncDomains(state.model);}catch(error){state.model=before;notice(error.message);return false;}if(record&&!state.transaction){state.undo.push(before);if(state.undo.length>60)state.undo.shift();state.redo=[];}save();if(ui)renderEditor(fit);else redraw(fit);updateHistory();window.dispatchEvent(new CustomEvent('gm:modelchange',{detail:{model:structuredClone(state.model)}}));return true;}
 function undo(){finishTransaction();state.multi=[];if(!state.undo.length)return;state.redo.push(structuredClone(state.model));state.model=state.undo.pop();state.occurrence=null;save();renderEditor();updateHistory();}
 function redo(){if(!state.redo.length)return;state.multi=[];state.undo.push(structuredClone(state.model));state.model=state.redo.pop();state.occurrence=null;save();renderEditor();updateHistory();}
@@ -33,10 +45,10 @@ function renderFraming({available,detail,span,cutaway}){
  $('view-3d-label').textContent=detail?'3D - '+span.toFixed(2)+' cm section':'3D';
  $('cut').setAttribute('aria-pressed',String(cutaway));
 }
-function openModel(m){state.model=normalize(structuredClone(m));state.multi=[];state.paint=null;state.undo=[];state.redo=[];state.occurrence=null;state.clonedOccurrence=null;state.scope='shared';state.page='editor';$('library').hidden=true;$('editor').hidden=false;$('editor').dataset.pane='view';$('export').disabled=false;$('validate').hidden=false;
+function openModel(m){finishTransaction();if(state.model)save();state.model=normalize(structuredClone(m));state.multi=[];state.paint=null;state.undo=[];state.redo=[];state.occurrence=null;state.clonedOccurrence=null;state.scope='shared';state.page='editor';$('model-name').setAttribute('aria-haspopup','menu');$('library').hidden=true;$('editor').hidden=false;$('editor').dataset.pane='view';$('export').disabled=false;$('validate').hidden=false;
  if(!state.viewer)state.viewer=new GeometryViewer($('view-host'),selectFromView,focusFromView,notice,renderFraming,delta=>{finishTransaction();mutate(m=>{applyScope(null);for(const id of state.multi?.length?state.multi:[m.selection.id]){const c=m.cells.find(c=>c.id===id);if(c&&!c.background)translateCell(m,c,(c.editorTranslation||c.translation||[0,0,0]).map((v,i)=>v+delta[i]));}});});
  save();renderEditor();redraw(true);document.title=plainLabel(state.model.name)+' - GM';$('main').focus({preventScroll:true});}
-function home(){state.page='library';$('library').hidden=false;$('editor').hidden=true;$('model-name').textContent='Models';$('validate').hidden=true;$('saved').textContent='';renderLibrary();document.title='GM OpenMC geometry studio';$('library').querySelector('h1').focus({preventScroll:true});}
+function home(){finishTransaction();if(state.model)save();state.page='library';if(state.documents.some(p=>!p.deletedAt))state.filter='projects';$('undo').disabled=true;$('redo').disabled=true;$('library').hidden=false;$('editor').hidden=true;$('model-name').textContent='Models';$('validate').hidden=true;$('saved').textContent='';$('export').disabled=true;$('counts').textContent='';renderLibrary();document.title='GM OpenMC geometry studio';$('library').querySelector('h1').focus({preventScroll:true});}
 function art(id){
  const general=generalArt(id);if(general)return general;
  const hex=['hex19','candu','fast-hex','htgr'].includes(id);let out='<svg viewBox="0 0 230 112" aria-hidden="true">';
@@ -47,11 +59,13 @@ function art(id){
  return out+'</svg>';
 }
 function renderLibrary(){
- document.querySelectorAll('[data-filter]').forEach(b=>{const family=b.dataset.filter;b.setAttribute('aria-pressed',String(family===state.filter));b.querySelector('span').textContent=STARTERS.filter(x=>family==='all'||family==='general'&&['csg','transport'].includes(x.family)||family==='reactors'&&['components','architectures'].includes(x.family)||x.family===family).length;});
+ $('model-name').removeAttribute('aria-haspopup');
+ $('search').placeholder=['projects','trash'].includes(state.filter)?'Search projects':'Search geometry';$('search').setAttribute('aria-label',['projects','trash'].includes(state.filter)?'Search projects':'Search models');
+ document.querySelectorAll('[data-filter]').forEach(b=>{const family=b.dataset.filter;b.setAttribute('aria-pressed',String(family===state.filter));b.querySelector('span').textContent=family==='projects'?state.documents.filter(p=>!p.deletedAt).length:STARTERS.filter(x=>family==='all'||family==='general'&&['csg','transport'].includes(x.family)||family==='reactors'&&['components','architectures'].includes(x.family)||x.family===family).length;});
  const query=$('search').value.toLowerCase(),list=STARTERS.filter(x=>(state.filter==='all'||state.filter==='general'&&['csg','transport'].includes(x.family)||state.filter==='reactors'&&['components','architectures'].includes(x.family)||x.family===state.filter)&&x.name.toLowerCase().includes(query));
- $('models').innerHTML=(query? '':pdfCard)+(list.map(x=>'<button class="model-card" data-open="'+x.id+'"><span class="art">'+art(x.id)+'</span><span class="card-name"><span>'+esc(x.name)+'</span>'+(x.family==='architectures'?'<span class="generic">Generic</span>':'<span class="arrow" aria-hidden="true">↗</span>')+'</span></button>').join('')||'<div class="hint">No matching models. <button id="clear-search" class="button">Clear search</button></div>');
- $('recent').innerHTML=state.documents[0]?'<button data-recent="'+esc(state.documents[0].id)+'">↶ '+esc(state.documents[0].name)+'</button>':'';
- $('category-title').textContent={all:'All examples',general:'CSG and transport',reactors:'Reactors',components:'Components',benchmarks:'Benchmarks',architectures:'Reactors'}[state.filter];
+ $('models').innerHTML=['projects','trash'].includes(state.filter)?projectsUI.renderGrid(state.filter==='trash',query):(query? '':pdfCard)+(list.map(x=>'<button class="model-card" data-open="'+x.id+'"><span class="art">'+art(x.id)+'</span><span class="card-name"><span>'+esc(x.name)+'</span>'+(x.family==='architectures'?'<span class="generic">Generic</span>':'<span class="arrow" aria-hidden="true">↗</span>')+'</span></button>').join('')||'<div class="hint">No matching models. <button id="clear-search" class="button">Clear search</button></div>');
+ projectsUI?.renderSidebar();
+ $('category-title').textContent={projects:'Your projects',trash:'Trash',all:'All examples',general:'CSG and transport',reactors:'Reactors',components:'Components',benchmarks:'Benchmarks',architectures:'Reactors'}[state.filter];
 }
 function selected(){const s=state.model?.selection;return s?state.model[{cell:'cells',surface:'surfaces',universe:'universes',lattice:'lattices',material:'materials'}[s.kind]]?.find(x=>x.id===s.id):null;}
 function select(kind,id,path=[],additive=false){
@@ -177,7 +191,7 @@ function applyScope(surfaceId){
 $('home').onclick=home;$('empty').onclick=()=>openModel(createEmptyModel());$('search').oninput=renderLibrary;
 $('undo').onclick=undo;$('redo').onclick=redo;$('add').onclick=()=>dialog('add-dialog');$('add-first').onclick=()=>dialog('add-dialog');
 $('export').onclick=()=>{$('export-plane').value=['xy','xz','yz'].includes(state.model.view)?state.model.view:'xy';dialog('export-dialog');};$('import').onclick=()=>$('files').click();
-$('model-name').onclick=()=>{if(state.page==='editor'){select('universe',0);$('editor').dataset.pane='properties';}};
+$('model-name').onclick=()=>{if(state.page==='editor')projectsUI.showMenu(state.model.id,{anchor:$('model-name')});else{state.filter='projects';renderLibrary();}};
 $('fit').onclick=()=>state.viewer?.fit();$('rotate').onclick=()=>state.viewer?.orbit();$('zoom-in').onclick=()=>state.viewer?.zoom(.8);$('zoom-out').onclick=()=>state.viewer?.zoom(1.25);
 $('pin-detail').onclick=()=>state.viewer?.toggleDetail();
 $('split').onclick=()=>{$('view-host').classList.toggle('split');$('split').setAttribute('aria-pressed',String($('view-host').classList.contains('split')));state.viewer?.updateFraming();state.viewer?.resize();state.viewer?.fit();};
@@ -193,7 +207,6 @@ $('files').onchange=async e=>{
 document.addEventListener('click',e=>{
  const b=e.target.closest('button');if(!b)return;
  if(b.dataset.open)openModel(createModelForTemplate(b.dataset.open));
- if(b.dataset.recent)openModel(state.documents.find(m=>m.id===b.dataset.recent));
  if(b.dataset.filter){state.filter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderLibrary();}
  if(b.id==='clear-search'){$('search').value='';state.filter='all';renderLibrary();}
  if(b.hasAttribute('data-close'))b.closest('dialog').close();
@@ -262,17 +275,19 @@ document.addEventListener('change',e=>{
  if(t.id==='nuclides'){try{const ns=t.value.trim().split('\n').filter(Boolean).map(row=>{const [name,val]=row.trim().split(/\s+/);if(!/^[A-Z][a-z]?\d+$/.test(name)||!(Number(val)>0))throw new Error('Use one nuclide and positive fraction per line, e.g. U235 0.03.');return{name,fraction:Number(val),basis:'ao'};});mutate(()=>x.nuclides=ns);}catch(error){$('nuclide-error').textContent=error.message;}}
 });
 function commands(){
- const q=$('command-search').value.toLowerCase(),list=[['New geometry','empty'],['Add cylinder','cylinder'],['Add sphere','sphere'],['Add box','box'],['Add tube','tube'],['Add spherical shell','shell'],['Open models','home'],['Fit geometry','fit'],['Export model','export'],['Undo','undo'],['Redo','redo'],...STARTERS.map(x=>[x.name,'model:'+x.id])];
+ const q=$('command-search').value.toLowerCase(),list=[...state.documents.filter(p=>!p.deletedAt).map(p=>['Open '+p.name,'project:'+p.id]),['New geometry','empty'],['Add cylinder','cylinder'],['Add sphere','sphere'],['Add box','box'],['Add tube','tube'],['Add spherical shell','shell'],['Open models','home'],['Fit geometry','fit'],['Export model','export'],['Undo','undo'],['Redo','redo'],...STARTERS.map(x=>[x.name,'model:'+x.id])];
  $('commands').innerHTML=list.filter(([name])=>name.toLowerCase().includes(q)).map(([name,key])=>'<button data-command="'+key+'">'+esc(name)+'</button>').join('');
 }
 $('command').onclick=()=>{commands();dialog('command-dialog');$('command-search').focus();};$('command-search').oninput=commands;
-document.addEventListener('click',e=>{const key=e.target.closest('[data-command]')?.dataset.command;if(!key)return;$('command-dialog').close();if(key.startsWith('model:'))openModel(createModelForTemplate(key.slice(6)));else if(key==='home')home();else if(key==='empty')openModel(createEmptyModel());else if(['cylinder','sphere','box','tube','shell'].includes(key)){if(!state.model)openModel(createEmptyModel());construction.open(key);}else $(key).click();});
+document.addEventListener('click',e=>{const key=e.target.closest('[data-command]')?.dataset.command;if(!key)return;$('command-dialog').close();if(key.startsWith('project:'))projectsUI.open(key.slice(8)).catch(error=>notice(error.message));else if(key.startsWith('model:'))openModel(createModelForTemplate(key.slice(6)));else if(key==='home')home();else if(key==='empty')openModel(createEmptyModel());else if(['cylinder','sphere','box','tube','shell'].includes(key)){if(!state.model)openModel(createEmptyModel());construction.open(key);}else $(key).click();});
 document.addEventListener('keydown',e=>{
- const editing=e.target.matches('input,textarea,select');
+ if(e.defaultPrevented||document.querySelector('[role=menu]:not([hidden])'))return;const editing=e.target.matches('input,textarea,select');if(document.querySelector('dialog[open]')&&!e.target.matches('#command-search'))return;
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&state.page==='editor'){e.preventDefault();save().catch(()=>{});return;}
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('command').click();}
- if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!editing){e.preventDefault();e.shiftKey?redo():undo();}
- if(!editing&&e.key.toLowerCase()==='f')state.viewer?.fit();
- if(!editing&&e.key==='+')state.viewer?.zoom(.8);if(!editing&&e.key==='-')state.viewer?.zoom(1.25);
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!editing&&state.page==='editor'){e.preventDefault();e.shiftKey?redo():undo();}
+ if(!editing&&e.key==='F2'&&state.page==='editor'){e.preventDefault();projectsUI.action('rename',state.model.id);return;}
+ if(!editing&&state.page==='editor'&&e.key.toLowerCase()==='f')state.viewer?.fit();
+ if(!editing&&state.page==='editor'&&e.key==='+')state.viewer?.zoom(.8);if(!editing&&state.page==='editor'&&e.key==='-')state.viewer?.zoom(1.25);
  if(e.target.matches('#command-search')&&e.key==='Enter')$('commands').querySelector('button')?.click();
  if(e.target.matches('.segments button')&&['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();const buttons=[...e.target.parentElement.children].filter(b=>!b.hidden),i=buttons.indexOf(e.target),j=e.key==='Home'?0:e.key==='End'?buttons.length-1:(i+(e.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length;buttons[j].focus();buttons[j].click();}
 });
@@ -301,7 +316,15 @@ if(navigator.modelContext?.registerTool){
  ])navigator.modelContext.registerTool(tool);
 }
 const construction=installConstruction({state,mutate,selected,select,notice,openModel,save,renderEditor,finishTransaction,art});
+const contextMenu=createContextMenu(notice);
+projectsUI=installProjects({state,store:projectStore,pending:pendingProjects,save,openModel,home,notice,download,esc,menu:contextMenu,refresh:()=>{if(state.page==='library')renderLibrary();}});
+installWorkspaceMenus({state,menu:contextMenu,projects:projectsUI,select,selected,construction,mutate,home,openModel,createEmptyModel});
 installPreferences();
 installPDFImport({openModel});
 installApp();
+try{await projectStore.migrate(localStorage);state.documents=await projectStore.list();if(state.documents.some(p=>!p.deletedAt))state.filter='projects';}
+catch(error){
+ try{const legacy=JSON.parse(localStorage.getItem('gm.documents.v2')||'[]');state.documents=legacy.map(model=>({id:model.id,name:model.name,updatedAt:0}));for(const model of legacy)pendingProjects.set(model.id,{model,promise:Promise.resolve()});if(legacy.length)state.filter='projects';}catch{}
+ notice('Project storage unavailable. Export your work before closing. '+error.message);
+}
 renderLibrary();

@@ -12,6 +12,8 @@ GM is an experiment in building OpenMC geometry in the browser. The goal is a sm
 
 Start empty or use one of 21 editable examples covering CSG, shielding, detectors and reactors. Move, duplicate and combine cells, edit materials, and build nested universes and lattices. Use **From PDF** to build a draft from a specification or benchmark. Choose a case, inspect the section preview and review extraction notes before opening the model. Missing essential dimensions are requested instead of filled in. Models autosave in your browser. Install the app for offline editing.
 
+Home lists your saved projects. Reopen, rename, duplicate or download them from their action menu. Deleted projects stay in Trash until restored. Right-click projects, geometry rows and property panels for context actions; the same menus open with Shift+F10. The title bar opens the current project's actions. Ctrl+K also finds saved projects.
+
 ## Architecture
 
 The source of truth is a JSON document (`gm-openmc-model/v1`), in centimetres. It preserves OpenMC surfaces, Boolean regions, cells, materials, universes and lattices.
@@ -22,7 +24,7 @@ The source of truth is a JSON document (`gm-openmc-model/v1`), in centimetres. I
 | Views | GPU ray/surface intersections for all supported cells; repeated universes share instances; workers build vector sections |
 | PDF import | OpenAI reads the selected PDF; a constrained plan runs through the shared builders, with source pages and notes saved in model metadata |
 | Export | `geometry.xml`, `materials.xml`, JSON and an editable OpenMC Python script |
-| Storage | Local browser storage for models; a Cloudflare Durable Object for optional mailing-list subscriptions |
+| Storage | IndexedDB stores each model and its project index atomically; a Cloudflare Durable Object stores optional mailing-list subscriptions |
 | Hosting | Cloudflare Worker and static assets, with a service worker for offline use |
 
 The 3D view evaluates surface equations and Boolean regions directly, including primitives, holes and intersections. Small regions use shader uniforms; larger regions use data textures and a short-circuit Boolean program. Bounding boxes schedule the GPU work without approximating the visible surfaces. Picking uses the same CSG boundaries. GPU arithmetic has finite precision, and large models remain limited by device memory and rendering cost.
@@ -32,6 +34,8 @@ XY/XZ/YZ sections are SVG paths computed in a worker, with zoom, pan and SVG/PDF
 Geometry checks sample for gaps and overlaps; they do not prove validity. Material presets and generic reactor examples are illustrative. Benchmark sources and simplifications live in model metadata.
 
 GM does not run particle transport. DAGMC import, rotated universe fills, distributed materials, settings and tallies are not implemented. Review exported geometry before using it in a simulation.
+
+Projects stay in the current browser. Existing local saves migrate automatically; there is no fixed project-count cap. Storage failures are shown, and stale tabs cannot overwrite newer saves. Export JSON copies for backups or to move between devices.
 
 ## Run locally
 
@@ -54,6 +58,8 @@ GitHub Actions checks geometry and validates XML/Python exports with OpenMC 0.15
 [Construction and model API](public/docs/construction.md) - [Agent API](https://gm.keff.uk/docs/agents/) - [OpenMC documentation](https://docs.openmc.org/en/stable/)
 
 ## PDF import operations
+
+[Detector housing example PDF](examples/pdf/detector-housing.pdf) is a small specification for trying **From PDF** manually. It is optional, makes no API call during tests or builds, and is not a required import fixture. The geometry editor works when PDF import is unavailable or disabled.
 
 Set `OPENAI_API_KEY` as a Worker secret. PDFs are sent only when **Create model** is pressed, using the Responses API with `store: false`. GM does not persist PDFs or extracted plans on the server. Provider retention policies still apply. The generated model is saved locally only after **Open model**.
 
