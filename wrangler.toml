@@ -2,6 +2,11 @@ name = "gm-keff-uk"
 main = "./src/index.js"
 compatibility_date = "2026-10-11"
 
+[[d1_databases]]
+binding = "MAILING_DB"
+database_name = "keff-updates"
+database_id = "82526bcf-d7a9-44b0-8da6-1a64e0b9ae39"
+
 [assets]
 directory = "./dist"
 binding = "ASSETS"

@@ -6,29 +6,50 @@ export class SubscriptionStore {
   constructor(ctx,env){this.ctx=ctx;this.env=env;}
   async fetch(request){
     const {action,...arg}=await request.json(),storage=this.ctx.storage;
+    // Sessions remain in the Durable Object; contacts live in the shared D1 database.
+    if(this.env.MAILING_DB && !await storage.get('mailing-d1-v1')){
+      let after;
+      do {
+        const rows=await storage.list({prefix:'subscriber:',limit:100,...(after?{startAfter:after}:{})});
+        if(rows.size)await this.env.MAILING_DB.batch([...rows.values()].map(row=>this.env.MAILING_DB.prepare("INSERT INTO mailing_subscriptions(email,site,created_at,consent_text) VALUES(?,'gm',?,?) ON CONFLICT(email,site) DO NOTHING").bind(row.email,row.subscribedAt,row.consent||'GM product updates')));
+        after=rows.size===100?[...rows.keys()].at(-1):null;
+      }while(after);
+      await storage.put('mailing-d1-v1',true);
+    }
+    if(action==='migrate')return json({ok:!!this.env.MAILING_DB});
     if(action==='session'){
       const existing=/^[a-f0-9-]{36}$/.test(arg.token||'')?await storage.get('session:'+arg.token):null;
       if(existing&&existing.expires>Date.now())return json({id:arg.token});
       const id=crypto.randomUUID();await storage.put('session:'+id,{expires:Date.now()+30*86400000});
       await storage.setAlarm(Date.now()+86400000);return json({id,fresh:true});
     }
-    if(action==='status')return json({subscribed:!!await storage.get('signup:'+arg.id)});
+    if(action==='status'){
+      const signup=await storage.get('signup:'+arg.id);
+      if(signup&&!signup.email&&signup.hash){signup.email=(await storage.get('subscriber:'+signup.hash))?.email;if(signup.email)await storage.put('signup:'+arg.id,signup);}
+      return json({subscribed:!!(signup?.email && await this.env.MAILING_DB.prepare("SELECT 1 FROM mailing_subscriptions WHERE site='gm' AND email=?").bind(signup.email).first())});
+    }
     if(action==='subscribe'){
       const key='signup:'+arg.id,prior=await storage.get(key);
       if(prior?.time>Date.now()-60000)return json({error:'Wait a minute before updating your subscription.'},429);
       const digest=await crypto.subtle.digest('SHA-256',encoder.encode(arg.email));
       const hash=Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join('');
-      if(prior?.hash&&prior.hash!==hash)await storage.delete('subscriber:'+prior.hash);
-      await storage.put('subscriber:'+hash,{email:arg.email,consent:'GM product updates',subscribedAt:new Date().toISOString()});
-      await storage.put(key,{time:Date.now(),hash});return json({ok:true});
+      const oldEmail=prior?.email||(prior?.hash?(await storage.get('subscriber:'+prior.hash))?.email:null);
+      const writes=[];
+      if(oldEmail&&oldEmail!==arg.email)writes.push(this.env.MAILING_DB.prepare("DELETE FROM mailing_subscriptions WHERE site='gm' AND email=?").bind(oldEmail));
+      writes.push(this.env.MAILING_DB.prepare("INSERT INTO mailing_subscriptions(email,site,consent_text) VALUES(?,'gm','GM product updates') ON CONFLICT(email,site) DO NOTHING").bind(arg.email));
+      await this.env.MAILING_DB.batch(writes);
+      await storage.put(key,{time:Date.now(),hash,email:arg.email});return json({ok:true});
     }
     if(action==='unsubscribe'){
-      const prior=await storage.get('signup:'+arg.id);if(prior)await storage.delete('subscriber:'+prior.hash);
+      const prior=await storage.get('signup:'+arg.id);
+      const email=prior?.email||(prior?.hash?(await storage.get('subscriber:'+prior.hash))?.email:null);
+      if(email)await this.env.MAILING_DB.prepare("DELETE FROM mailing_subscriptions WHERE site='gm' AND email=?").bind(email).run();
+      if(prior)await storage.delete('subscriber:'+prior.hash);
       await storage.delete('signup:'+arg.id);return json({ok:true});
     }
     if(action==='subscribers'){
-      const rows=await storage.list({prefix:'subscriber:',limit:500,...(arg.after?{startAfter:arg.after}:{})});
-      return json({entries:[...rows.values()],next:rows.size===500?[...rows.keys()].at(-1):null});
+      const rows=await this.env.MAILING_DB.prepare("SELECT email,created_at AS subscribedAt,consent_text AS consent FROM mailing_subscriptions WHERE site='gm' ORDER BY email LIMIT 500").all();
+      return json({entries:rows.results,next:null});
     }
     return json({error:'Unknown subscription operation.'},400);
   }
